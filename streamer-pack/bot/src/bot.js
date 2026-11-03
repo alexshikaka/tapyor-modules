@@ -35,6 +35,18 @@ const OUTCOME = {
 };
 function outcomeText(o) { return OUTCOME[o] || (String(o).startsWith('refund-') ? 'баллы вернул (' + o.slice(7) + ')' : o); }
 
+// Режим имитации зрителей — ТОЛЬКО для проверок (TAPYOR_BOT_SIM=1 при запуске из исходников).
+// Стример пишет в свой чат «#sim ник [vip] [mod] [sub] [follower] текст» — бот обрабатывает это как сообщение зрителя.
+// «#simpts ник текст» — как взятую награду за баллы (Twitch не трогается: «выполнено»/возврат — только в журнал).
+// «#simshared ник текст» — зритель из чужого канала в общем чате. Без переменной не работает вовсе.
+const SIM = typeof process !== 'undefined' && process.env && process.env.TAPYOR_BOT_SIM === '1';
+function parseSim(text) {
+  const m = /^#(sim|simpts|simshared)\s+@?([a-z0-9_]{2,25})((?:\s+(?:vip|mod|sub|follower))*)\s+([\s\S]+)$/i.exec(String(text || '').trim());
+  if (!m) return null;
+  const roles = new Set(m[3].toLowerCase().split(/\s+/).filter(Boolean));
+  return { kind: m[1].toLowerCase(), login: m[2].toLowerCase(), roles, text: m[4].trim() };
+}
+
 class Bot {
   // deps (для тестов): fetch, WebSocket, now, rnd, setTimer, clearTimer, makeEventSub
   constructor(core, deps = {}) {
@@ -201,6 +213,10 @@ class Bot {
 
   async onChat(ev) {
     const { chat } = this.ids();
+    if (SIM && (ev.chatter_user_id === (this.channel && this.channel.id))) {
+      const sim = parseSim(ev.message && ev.message.text);
+      if (sim) return this.onSim(sim, ev);
+    }
     if (chat.user && ev.chatter_user_id === chat.user.id && chat.user.id !== this.channel.id) return; // сам бот
     const badges = new Set((ev.badges || []).map((b) => b.set_id));
     const user = {
@@ -215,6 +231,21 @@ class Bot {
     const text = (ev.message && ev.message.text) || '';
     const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text, user, own });
     if (out !== 'ignore') { this.journalAdd('cmd', user.login + ' · ' + text + ' → ' + outcomeText(out)); this.persist(); }
+  }
+
+  async onSim(sim, ev) {
+    const id = 'sim-' + sim.login, r = sim.roles;
+    if (sim.kind === 'simpts') {
+      const out = await this.points.handle({ id: 'sim-' + ev.message_id, at: this.now(), input: sim.text, user: { id, login: sim.login } });
+      this.journalAdd('points', '[имитация] ' + sim.login + ' · ' + sim.text + ' → ' + outcomeText(out));
+      return out;
+    }
+    const user = { id, login: sim.login, isBroadcaster: false, isMod: r.has('mod'), isVip: r.has('vip'), isSub: r.has('sub'),
+      followedAt: r.has('follower') ? this.now() - 365 * 86400000 : null };
+    const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text: sim.text, user, own: sim.kind !== 'simshared' });
+    this.journalAdd('cmd', '[имитация] ' + sim.login + ' · ' + sim.text + ' → ' + outcomeText(out));
+    this.persist();
+    return out;
   }
 
   // Фолловинг нужен, только если категория «Фолловеры» настроена иначе, чем «Зрители».
@@ -272,6 +303,7 @@ class Bot {
     await this.helix.updateReward(broadcaster, s.rewardId, { paused });
   }
   async redemption(redemptionId, status) {
+    if (String(redemptionId).startsWith('sim-')) { this.journalAdd('points', '[имитация] награда ' + (status === 'FULFILLED' ? 'выполнена' : 'отменена — баллы вернулись')); return; }
     const s = this.settings(), { broadcaster } = this.ids();
     await this.helix.setRedemption(broadcaster, s.rewardId, redemptionId, status);
   }
@@ -312,4 +344,4 @@ class Bot {
 
 async function activate(core, deps) { const bot = new Bot(core, deps); await bot.start(); return bot; }
 
-module.exports = { Bot, activate, DEFAULT_SETTINGS, outcomeText };
+module.exports = { Bot, activate, DEFAULT_SETTINGS, outcomeText, parseSim };
