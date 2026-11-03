@@ -14,7 +14,8 @@
 ```
 streamer-pack/
   manifest.json      { "id": "streamer-pack", "version": "0.1.0", "minCore": "0.30.0",
-                       "main": "bot/src/index.js", "ui": "bot/ui/panel.js" }
+                       "modules": [ { "id": "bot", "sinceEdition": 1,
+                                      "main": "bot/src/index.js", "ui": "bot/ui/panel.js" } ] }
   bot/
     src/             код главного процесса (Node): Twitch, логика бота
     ui/              раздел в настройках Тапёра
@@ -25,7 +26,9 @@ streamer-pack/
 
 ## Привратник (лицензия)
 
-Ядро один раз при запуске модуля спрашивает: `core.license.isEnabled('streamer-pack')`.
+Ядро один раз при запуске модуля спрашивает: `core.license.isEnabled('streamer-pack', 'bot')`.
+Модуль включён, если редакция лицензии пака (`edition`) не меньше `sinceEdition` модуля: купившие пак 1
+владеют своими модулями навсегда и получают их обновления, новые модули пака 2 — отдельная покупка.
 - `true` — модуль запускается.
 - `false` — модуль не запускается; его раздел в настройках виден бледным, настройки сохранены, плеер работает.
 
