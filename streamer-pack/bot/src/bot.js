@@ -9,6 +9,7 @@ const { EventSub } = require('./twitch/eventsub');
 const { Pipeline, DEFAULT_CFG } = require('./logic/pipeline');
 const { Points } = require('./logic/points');
 const { Tracker } = require('./logic/access');
+const replies = require('./logic/replies');
 
 const DEFAULT_SETTINGS = {
   ...DEFAULT_CFG,
@@ -16,6 +17,9 @@ const DEFAULT_SETTINGS = {
   pointsOn: true,
   reward: { title: 'Заказать песню', cost: 1000, prompt: 'Исполнитель — название или ссылка', color: '#FFB547', perUserPerStream: 2, cooldownSec: 0 },
   rewardId: null,
+  banMin: 10,               // ⛔ у заказа «Твич»: на сколько минут закрыть зрителю заказы
+  minTrackSec: 60,          // самый короткий трек (проверяет ядро)
+  minViews: 5000,           // ссылки YouTube: минимум просмотров (проверяет ядро)
   sendIntervalMs: 1100      // не чаще одного сообщения в ~секунду — лимиты Twitch
 };
 
@@ -281,6 +285,7 @@ class Bot {
       }
       case 'settings': return this.settings();
       case 'health': return Object.values(this.lastHealth || {});
+      case 'replyDefaults': return replies.DEFAULTS;
       case 'reward:sync': return this.syncReward();
       case 'save': return this.saveSettings(data);
       case 'login': { const f = await this.login(data.role); return { userCode: f.userCode, verificationUri: f.verificationUri, expiresIn: f.expiresIn }; }
