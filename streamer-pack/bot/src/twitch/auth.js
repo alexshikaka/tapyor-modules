@@ -85,7 +85,7 @@ class Identity {
     if (!v) throw new TwitchError('Twitch не принял вход', 401);
     this.user = { id: v.userId, login: v.login };
     await this.save();
-    this.log('Twitch: вход ' + this.name + ' — ' + v.login);
+    this.log('Twitch: вход ' + ({ broadcaster: 'стримера', bot: 'бота' }[this.name] || this.name) + ' — ' + v.login);
     return this.user;
   }
 
