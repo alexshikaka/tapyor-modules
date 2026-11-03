@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тапёр · оверлей-плейлист</title>
+<!-- Шрифты — общие файлы Тапёра (локальные, без интернета): пиксельный Pixelify Sans с кириллицей -->
+<link rel="stylesheet" href="/fonts.css">
+<link rel="stylesheet" href="playlist.css">
+</head>
+<body>
+<div id="ov" class="ov" data-v="b" data-h="r" hidden>
+  <div class="head" id="head">
+    <div class="cov"><canvas id="cov" width="16" height="16" aria-hidden="true"></canvas></div>
+    <div class="txt">
+      <div class="tline" id="tline"><span class="lab" id="labT"></span><span class="tclip"><span class="tval" id="tval"></span></span></div>
+      <span class="meas" id="meas" aria-hidden="true"></span>
+      <div class="aline" id="aline"></div>
+      <div class="sline" id="sline"></div>
+    </div>
+  </div>
+  <div class="osc" id="osc" aria-hidden="true"></div>
+  <div class="prog" id="prog" aria-hidden="true"></div>
+  <div class="queue" id="queue"></div>
+</div>
+<script src="dos.js"></script>
+<script src="playlist.js"></script>
+</body>
+</html>

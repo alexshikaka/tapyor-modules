@@ -1,0 +1,69 @@
+/* Оверлей «DOS-терминал». Страница прозрачная: OBS накладывает её на кадр как есть.
+   Раскладка под угол экрана — атрибуты data-v (t|b) и data-h (l|c|r) на #ov, без правки DOM скриптом. */
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+
+.ov {
+  --c: #FFB000; --c0: #FFB00040;
+  position: absolute; width: 340px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 6px;
+  font-family: 'Pixelify Sans', 'Consolas', monospace; font-size: 22px; line-height: 1.12;
+  color: var(--c); text-align: left;
+  -webkit-font-smoothing: none;
+}
+.ov[hidden] { display: none; }
+.ov[data-v="b"] { flex-direction: column-reverse; }           /* снизу экрана: трек у края, список над ним */
+.ov[data-h="r"] { text-align: right; }
+.ov[data-h="c"] { text-align: center; }
+
+/* Чёрная обводка: пиксельная тень в 8 сторон, у блоков — тонкий контур */
+.ov.outline { text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000, 2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000; }
+.ov.outline .cov, .ov.outline .osc i, .ov.outline .prog i.on { box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .6); }
+
+.head { display: flex; gap: 10px; align-items: center; transition: opacity .25s; }
+.head.swap { opacity: 0; }
+.ov[data-h="r"] .head { flex-direction: row-reverse; }        /* справа всё зеркалится: обложка у края */
+.ov[data-h="c"] .head { justify-content: center; }
+
+.cov { width: 56px; height: 56px; flex: none; box-sizing: border-box; border: 3px solid var(--c); line-height: 0; background: #140C00; }
+.cov canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.ov.nocov .cov { display: none; }
+
+.txt { position: relative; min-width: 0; flex: 1 1 auto; }
+/* Строка названия в полтора раза длиннее места рядом с обложкой и выходит за оверлей к центру экрана */
+.tline { display: flex; align-items: baseline; white-space: nowrap; overflow: hidden; width: 150%; }
+.ov[data-h="r"] .tline { margin-left: -50%; justify-content: flex-end; }
+.ov[data-h="c"] .tline { margin-left: -25%; justify-content: center; }
+.lab { flex: none; white-space: pre; }
+.tclip { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.tval { display: inline-block; white-space: pre; }
+.tval.mq { animation: tapmq var(--mqs, 9s) linear infinite; }
+@keyframes tapmq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.meas { position: absolute; left: 0; top: 0; visibility: hidden; white-space: pre; }
+.aline { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+
+/* Вертушка и время: каждый знак в клетке одной ширины — цифры не дёргаются */
+.sline { white-space: nowrap; overflow: hidden; }
+.sline span { display: inline-block; width: .62em; text-align: center; }
+.sline.paused { animation: tapbl 1.2s steps(1) infinite; }
+@keyframes tapbl { 50% { opacity: .2; } }
+
+/* Осциллограмма: столбики всегда растут снизу вверх, новое — справа */
+.osc { display: flex; gap: 2px; height: 22px; align-items: flex-end; }
+.osc i { flex: 1; display: block; height: 12.5%; background: var(--c); }
+.ov.no-osc .osc { display: none; }
+
+/* Прогресс: всегда слева направо, в любом углу экрана */
+.prog { display: flex; gap: 3px; height: 14px; flex-direction: row; }
+.prog i { flex: 1; display: block; background: var(--c0); }
+.prog i.on { background: var(--c); }
+.ov.no-prog .prog { display: none; }
+
+.queue { display: flex; flex-direction: column; font-size: 20px; border-top: 3px solid var(--c); padding-top: 4px; }
+.ov[data-v="b"] .queue { flex-direction: column-reverse; border-top: 0; padding-top: 0; border-bottom: 3px solid var(--c); padding-bottom: 4px; }
+.queue div { white-space: pre; overflow: hidden; }
+.queue:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tval.mq, .sline.paused { animation: none; }
+  .head { transition: none; }
+}

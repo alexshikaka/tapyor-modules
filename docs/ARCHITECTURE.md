@@ -14,8 +14,8 @@
 ```
 streamer-pack/
   manifest.json      { "id": "streamer-pack", "version": "0.1.0", "minCore": "0.30.0",
-                       "modules": [ { "id": "bot", "sinceEdition": 1,
-                                      "main": "bot/src/index.js", "ui": "bot/ui/panel.js" } ] }
+                       "modules": [ { "id": "bot", "sinceEdition": 1, "main": "bot/src/index.js" },
+                                    { "id": "overlay", "sinceEdition": 1, "main": "overlay/src/index.js" } ] }
   bot/
     src/             код главного процесса (Node): Twitch, логика бота
     ui/              раздел в настройках Тапёра
@@ -55,11 +55,35 @@ streamer-pack/
 | `core.health.set(lineId, state, text, action)` | строки «Чат-бот · …» в стартовом чеклисте; `state`: `ok` / `warn` / `bad` |
 | `core.journal.load()` / `.append(entry)` | журнал бота в файл по дням (7 дней), чтобы пережил перезапуск. Тексты чата — только здесь, не в логе Тапёра |
 | `core.hotkeys.register(id, handler)` | горячая клавиша (например, «открыть событие») |
+| `core.http.mount(prefix, handler)` / `.unmount(prefix)` | своя страница на локальном сервере Тапёра (тот же порт, что у панели OBS, по умолчанию 47654). Только `GET`, префикс — одно слово (`/overlay`). `handler(req, res, sub, query)` |
+| `core.http.url(path)` | полный адрес страницы для OBS (`http://127.0.0.1:47654/overlay/playlist`) |
+| `core.player.on('state', fn)` | снимок плеера: `{ np: { title, artist, cover, pos, dur, playing, at } \| null, next: [...], after: [...] }`. `next` — очередь, `after` — что сыграет фон (волна). Ответ — функция отписки |
+| `core.player.on('level', fn)` | общий уровень звука 0…1, ~11 раз в секунду (для осциллограммы) |
+| `core.player.want({ state, levels })` | что модулю нужно сейчас. Пока никто не смотрит страницу — `false`, и окно Тапёра ничего не собирает и не шлёт |
+| `core.player.coverImage(url)` | обложка своего файла с компьютера (`/lcover/…`): `{ mime, data }` — страница OBS сама её не получит |
 
 Окно настроек модуля (рендерер) общается со своей половиной в главном процессе через один канал
-`window.app.module('streamer-pack', command, data)` — ядро только передаёт сообщения.
+`window.app.modCmd(<id модуля>, command, data)` → `command(cmd, data)` модуля — ядро только передаёт сообщения
+(у бота исторически свой `botCmd`).
 
 ## Что модуль делает сам
+
+## Оверлей-плейлист (`streamer-pack/overlay/`)
+
+Страница для OBS (источник «Браузер», 1920×1080, прозрачная): что играет, обложка, осциллограмма, прогресс, что дальше.
+
+| Часть | Что делает |
+|---|---|
+| `src/index.js` | `activate(core)`: страница на `/overlay`, поток `/overlay/events` (SSE), обложка своего файла `/overlay/cover` |
+| `src/settings.js` | настройки и их проверка (цвет, угол, сдвиг, размер, до 10 песен, что показывать) |
+| `src/feed.js` | что уходит странице: настройки + трек + список «дальше» (с добором из волны) |
+| `page/playlist.*` | сама страница, стиль «DOS-терминал»; `?preview=1` — превью в настройках (не считается источником OBS), `?demo=1` — демо-трек |
+| `page/dos.js` | раскладка и текст без DOM — проверяется тестами |
+
+Модуль **только читает** плеер: на странице нет ни одной команды, сервер принимает от неё только `GET`.
+Шрифт — общий файл ядра `/fonts.css` (Pixelify Sans с кириллицей, лежит внутри Тапёра, интернет не нужен).
+
+## Чат-бот: что модуль делает сам
 
 Ядро про Twitch не знает ничего — всё в модуле:
 

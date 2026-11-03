@@ -7,6 +7,6 @@
   "type": "commonjs",
   "engines": { "node": ">=20" },
   "scripts": {
-    "test": "node --test streamer-pack/bot/tests/*.test.js"
+    "test": "node --test streamer-pack/*/tests/*.test.js"
   }
 }

@@ -37,7 +37,8 @@
 |---|---|
 | `streamer-pack/` | платный пак стримера |
 | `streamer-pack/bot/` | чат-бот Twitch (первый модуль) |
-| `streamer-pack/dock/`, `streamer-pack/overlays/` | позже |
+| `streamer-pack/overlay/` | оверлей-плейлист для OBS: `src/` — главный процесс, `page/` — страница, `tests/` |
+| `streamer-pack/dock/` | позже |
 | `skins/` | оболочки (переедут из ядра к 1.0) |
 | `docs/` | устройство модулей и связь с ядром |
 
