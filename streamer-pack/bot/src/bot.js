@@ -177,7 +177,11 @@ class Bot {
     }
   }
 
-  health(line, state, text, action) { this.core.health && this.core.health.set('bot.' + line, state, text, action); }
+  health(line, state, text, action) {
+    this.lastHealth = this.lastHealth || {};
+    this.lastHealth['bot.' + line] = { id: 'bot.' + line, state, text, action };
+    this.core.health && this.core.health.set('bot.' + line, state, text, action);
+  }
 
   // ---------- события Twitch ----------
   async onEvent(type, ev) {
@@ -276,6 +280,8 @@ class Bot {
           nextEventMin: this.pipeline && this.pipeline.scheduler.minutesLeft(this.now()) };
       }
       case 'settings': return this.settings();
+      case 'health': return Object.values(this.lastHealth || {});
+      case 'reward:sync': return this.syncReward();
       case 'save': return this.saveSettings(data);
       case 'login': { const f = await this.login(data.role); return { userCode: f.userCode, verificationUri: f.verificationUri, expiresIn: f.expiresIn }; }
       case 'logout': return this.logout(data.role);
