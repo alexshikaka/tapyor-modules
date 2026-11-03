@@ -272,6 +272,8 @@ class Bot {
     }
     const user = { id, login: sim.login, isBroadcaster: false, isMod: r.has('mod'), isVip: r.has('vip'), isSub: r.has('sub'),
       followedAt: r.has('follower') ? this.now() - 365 * 86400000 : null };
+    // как и настоящие зрители — запоминаем ник: он нужен в журнале и в списке тайм-аутов
+    this.logins = this.logins || new Map(); this.logins.set(user.id, user.login);
     const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text: sim.text, user, own: sim.kind !== 'simshared' });
     this.journalAdd('cmd', '[имитация] ' + sim.login + ' · ' + sim.text + ' → ' + outcomeText(out));
     this.persist();
