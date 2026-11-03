@@ -157,9 +157,17 @@ class Bot {
 
   async subPoints(broadcaster, sid) {
     if (!this.settings().pointsOn) return;
-    const rid = await this.syncReward();
-    if (!rid) return;
-    await this.helix.subscribe(broadcaster, sid, 'channel.channel_points_custom_reward_redemption.add', '1', { broadcaster_user_id: broadcaster.user.id, reward_id: rid });
+    // Баллы — необязательная часть: у канала без партнёрства/компаньонства Twitch отвечает 403.
+    // Это не должно рвать чат и уводить EventSub в бесконечное переподключение.
+    try {
+      const rid = await this.syncReward();
+      if (!rid) return;
+      await this.helix.subscribe(broadcaster, sid, 'channel.channel_points_custom_reward_redemption.add', '1', { broadcaster_user_id: broadcaster.user.id, reward_id: rid });
+    } catch (e) {
+      const noPoints = e && e.status === 403;
+      this.health('points', 'warn', noPoints ? 'баллы канала недоступны (нужен компаньон или партнёр)' : 'не подписался', 'login-broadcaster');
+      this.log('награда: ' + (e && e.message || e) + ' — чат продолжает работать');
+    }
   }
 
   openSub(identity, subscribe, line) {

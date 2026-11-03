@@ -129,6 +129,31 @@ test('бот: команда в чате → поиск ядром → отве�
   assert.ok(!JSON.stringify(bot.journal).includes('AT'), 'токен не попал в журнал');
 });
 
+test('бот: 403 на награду за баллы не рвёт чат', async () => {
+  const core = botCore();
+  core._settings.set('bot', { identity: 'self', pointsOn: true, access: { viewer: { access: 'always', active: 1, pauseMin: 0 }, follower: { access: 'always' }, sub: { access: 'always' }, vip: { access: 'always' }, mod: { access: 'always', unlimited: true } } });
+  core._store.set('twitch.broadcaster', JSON.stringify({ tokens: { access: 'AT', refresh: 'RT', expiresAt: 9e15 }, user: { id: '100', login: 'alexshikaka' } }));
+  const log = [];
+  const fetch = router({
+    'GET /helix/streams': () => ({ json: { data: [{ id: 's' }] } }),
+    'POST /helix/eventsub/subscriptions': ({ body }) => body.type === 'channel.channel_points_custom_reward_redemption.add'
+      ? { status: 403, json: { message: 'The broadcaster does not have partner or affiliate status.' } }
+      : { status: 202, json: { data: [{}] } },
+    'GET /helix/channel_points/custom_rewards': () => ({ json: { data: [] } }),
+    'POST /helix/channel_points/custom_rewards': () => ({ json: { data: [{ id: 'rw1' }] } }),
+    'POST /helix/chat/messages': () => ({ json: { data: [{ is_sent: true }] } })
+  }, log);
+  let es;
+  const makeEventSub = (o) => { es = new EventEmitter(); es.start = async () => { await o.subscribe('sess'); es.emit('state', 'up'); }; es.stop = () => {}; return es; };
+  const bot = new Bot(core, { fetch, makeEventSub, sleep: async () => {}, setInterval: () => 0, clearInterval: () => {} });
+  await bot.start();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(core._health['bot.chat'].st, 'ok');
+  assert.equal(core._health['bot.points'].st, 'warn');
+  assert.match(core._health['bot.points'].text, /компаньон|партнёр/);
+  assert.equal(log.filter((x) => x.key === 'POST /helix/eventsub/subscriptions' && x.body.type === 'channel.chat.message').length, 1);
+});
+
 test('бот: баллы — заиграл → FULFILLED, убран → CANCELED', async () => {
   const core = botCore();
   core._settings.set('bot', { identity: 'self', rewardId: 'rw1' });
