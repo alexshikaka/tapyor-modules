@@ -1,0 +1,12 @@
+{
+  "name": "tapyor-modules",
+  "private": true,
+  "description": "Модули Тапёра: пак стримера (чат-бот Twitch, док-панель, оверлеи) и оболочки",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "alexshikaka",
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test streamer-pack/bot/tests/"
+  }
+}

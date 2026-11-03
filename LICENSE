@@ -1,0 +1,50 @@
+Tapyor Modules — Source-Available License
+Copyright (c) 2026 alexshikaka. All rights reserved.
+
+The source code in this repository is published so that anyone can read and
+audit it. Publishing the source does not grant permission to use it beyond
+what this license states.
+
+You MAY:
+  - read, study and audit the source code;
+  - build and run it on your own computer to verify what it does;
+  - report security issues to the author.
+
+You MAY NOT, without written permission from the author:
+  - redistribute this code or builds made from it, in whole or in part;
+  - sell, sublicense or offer it as a service;
+  - publish modified versions, or builds with license checks removed or altered;
+  - use it in another product.
+
+Paid features require a license key purchased from the author. A trial key
+is available. Running the modules without a valid key, other than to audit
+them, is not permitted.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+---
+
+Модули Тапёра — лицензия «исходный код открыт для проверки»
+© 2026 alexshikaka. Все права защищены.
+
+Код опубликован, чтобы любой мог прочитать и проверить его. Публикация кода
+не даёт прав сверх перечисленных здесь.
+
+Можно:
+  - читать, изучать и проверять код;
+  - собрать и запустить его на своём компьютере, чтобы проверить, что он делает;
+  - сообщать автору о проблемах безопасности.
+
+Нельзя без письменного разрешения автора:
+  - распространять код или сборки из него, целиком или частями;
+  - продавать, передавать права, предлагать как сервис;
+  - выкладывать изменённые версии или сборки с вырезанной или изменённой проверкой лицензии;
+  - использовать в другом продукте.
+
+Платные функции работают по ключу, купленному у автора; есть пробный ключ.
+Запускать модули без действующего ключа можно только для проверки кода.
+
+Программа предоставляется «как есть», без каких-либо гарантий.
+При расхождении английского и русского текста действует английский.

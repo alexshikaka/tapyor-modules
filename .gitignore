@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+# Ключи и токены сюда не попадают никогда — только секреты Actions.
+*.secret.json
+*.local.json
+.env
+.env.*
