@@ -104,6 +104,18 @@ test('⛔: трек убран, зритель в тайм-ауте, бот че
   assert.match(said.at(-1).text, /ещё на 8 мин/);
 });
 
+test('⛔ у своего заказа: трек убран, тайм-аута стримеру нет', async () => {
+  const { p, c, core, msg } = make();
+  const me = user('alex', { isBroadcaster: true });
+  assert.equal(await msg(me, '!play кино группа крови'), 'queued');
+  const key = core.added[0].id, uid = p.orders.get(key);
+  assert.equal(p.orderBan(key, 10, { isBroadcaster: true }), false);
+  assert.equal(p.tracker.timeoutLeftMin(uid, c.now()), 0); // тайм-аут не поставлен
+  assert.equal(p.orders.has(key), false);                  // но заказ снят с учёта
+  c.add(2 * 60000);
+  assert.equal(await msg(me, '!play земфира искала'), 'queued'); // стример заказывает дальше
+});
+
 test('заблокированный — молча', async () => {
   const { p, said, msg } = make();
   p.tracker.block('u-spam', 'spam');

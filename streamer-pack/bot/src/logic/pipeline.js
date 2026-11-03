@@ -215,11 +215,13 @@ class Pipeline {
   // ---------- события очереди от ядра ----------
   orderPlayed(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onPlayed(id, orderId, this.now()); this.orders.delete(orderId); } }
   orderDropped(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onDropped(id, orderId); this.orders.delete(orderId); } }
-  // ⛔ у заказа «Твич»: трек уже убран ядром, зритель — в тайм-аут. На стримера не действует.
+  // ⛔ у заказа «Твич»: трек уже убран ядром, зритель — в тайм-аут. На стримера не действует:
+  // его заказ просто уходит из учёта, без тайм-аута (иначе стример закрывал бы заказы сам себе).
   orderBan(orderId, minutes, user) {
     const id = this.orders.get(orderId);
-    if (id == null || (user && user.isBroadcaster)) return false;
+    if (id == null) return false;
     this.tracker.onDropped(id, orderId); this.orders.delete(orderId);
+    if (user && user.isBroadcaster) return false;
     this.tracker.timeout(id, minutes, this.now());
     return true;
   }

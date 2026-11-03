@@ -121,8 +121,22 @@ class Bot {
       twitch: { fulfill: (rid) => this.redemption(rid, 'FULFILLED'), cancel: (rid) => this.redemption(rid, 'CANCELED') }
     });
     this.core.on('order:played', (id) => { this.pipeline.orderPlayed(id); this.points.played(id); this.persist(); });
-    this.core.on('order:dropped', (id, why) => { this.pipeline.orderDropped(id); this.points.dropped(id, why); this.persist(); });
-    this.core.on('order:ban', (id, min) => { if (this.pipeline.orderBan(id, min)) { this.journalAdd('ban', '⛔ тайм-аут ' + min + ' мин'); this.persist(); } });
+    // Заказ не прозвучал: стример убрал его из очереди или трек не включился. Пишем в журнал —
+    // это видно во вкладке «Ответы и журнал», и лимит «активных» у зрителя освобождается.
+    this.core.on('order:dropped', (id, why) => {
+      const uid = this.pipeline.orders.get(id);
+      const who = (uid != null && this.logins && this.logins.get(uid)) || '';
+      this.pipeline.orderDropped(id);
+      this.points.dropped(id, why);
+      this.journalAdd('cmd', 'заказ' + (who ? ' ' + who : '') + ' не прозвучал — ' + (why === 'failed' ? 'трек не включился' : 'стример убрал'));
+      this.persist();
+    });
+    // ⛔: у своего заказа (стримера) трек убирается, но тайм-аут не ставится.
+    this.core.on('order:ban', (id, min) => {
+      const uid = this.pipeline.orders.get(id);
+      const user = { isBroadcaster: !!(this.channel && uid === this.channel.id) };
+      if (this.pipeline.orderBan(id, min, user)) { this.journalAdd('ban', '⛔ тайм-аут ' + min + ' мин'); this.persist(); }
+    });
     this.every(1000, () => this.pipeline.tick().catch((e) => this.log('событие: ' + e.message)));
     this.every(3600000, () => this.checkLogins());
     await this.connect();

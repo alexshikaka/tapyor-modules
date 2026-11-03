@@ -181,3 +181,50 @@ test('бот: баллы — заиграл → FULFILLED, убран → CANCEL
   const st = log.filter((x) => x.key === 'PATCH /helix/channel_points/custom_rewards/redemptions').map((x) => x.query.id + ':' + x.body.status);
   assert.deepEqual(st.sort(), ['red1:FULFILLED', 'red2:CANCELED']);
 });
+
+// Общая обвязка: бот целиком с поддельным Twitch
+function botSetup(extraCfg = {}) {
+  const core = botCore();
+  const access = { viewer: { access: 'always', active: 1, pauseMin: 0 }, follower: { access: 'always' }, sub: { access: 'always' }, vip: { access: 'always' }, mod: { access: 'always', unlimited: true } };
+  core._settings.set('bot', { identity: 'self', onlyLive: false, access, ...extraCfg });
+  core._store.set('twitch.broadcaster', JSON.stringify({ tokens: { access: 'AT', refresh: 'RT', expiresAt: 9e15 }, user: { id: '100', login: 'alexshikaka' } }));
+  const log = [];
+  const fetch = router({
+    'GET /helix/streams': () => ({ json: { data: [] } }),
+    'POST /helix/eventsub/subscriptions': () => ({ status: 202, json: {} }),
+    'GET /helix/channel_points/custom_rewards': () => ({ json: { data: [{ id: 'rw1' }] } }),
+    'PATCH /helix/channel_points/custom_rewards': () => ({ status: 204 }),
+    'POST /helix/chat/messages': () => ({ json: { data: [{ is_sent: true }] } })
+  }, log);
+  let es;
+  const makeEventSub = (o) => { es = new EventEmitter(); es.start = async () => { await o.subscribe('sess'); }; es.stop = () => {}; return es; };
+  const bot = new Bot(core, { fetch, makeEventSub, sleep: async () => {}, setInterval: () => 0, clearInterval: () => {} });
+  return { core, bot, get es() { return es; }, log };
+}
+
+test('бот: ⛔ у своего заказа — трек убран, тайм-аута стримеру нет', async () => {
+  const s = botSetup();
+  await s.bot.start(); await new Promise((r) => setImmediate(r));
+  s.es.emit('event', 'channel.chat.message', { message_id: 'b1', chatter_user_id: '100', chatter_user_login: 'alexshikaka', badges: [{ set_id: 'broadcaster' }], message: { text: '!play кино группа крови' } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.core.added.length, 1);
+  const key = s.core.added[0].id;
+  s.core.emit('order:ban', key, 10);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.bot.pipeline.tracker.timeoutLeftMin('100', Date.now()), 0); // стример не в тайм-ауте
+  assert.equal(s.bot.pipeline.orders.has(key), false);                       // заказ снят с учёта
+  assert.ok(!s.bot.journal.some((x) => x.kind === 'ban'), 'в журнале нет ⛔');
+});
+
+test('бот: заказ убран из очереди — в журнале «не прозвучал»', async () => {
+  const s = botSetup();
+  await s.bot.start(); await new Promise((r) => setImmediate(r));
+  s.es.emit('event', 'channel.chat.message', { message_id: 'v1', chatter_user_id: '7', chatter_user_login: 'vasya', badges: [], message: { text: '!play кино группа крови' } });
+  await new Promise((r) => setTimeout(r, 10));
+  s.core.emit('order:dropped', s.core.added[0].id, 'removed');
+  await new Promise((r) => setTimeout(r, 10));
+  const line = s.bot.journal.find((x) => /не прозвучал/.test(x.text));
+  assert.ok(line, 'запись в журнале есть');
+  assert.match(line.text, /vasya/);
+  assert.match(line.text, /стример убрал/);
+});
