@@ -209,6 +209,8 @@ class Bot {
       isMod: badges.has('moderator'), isVip: badges.has('vip'), isSub: badges.has('subscriber') || badges.has('founder'),
       followedAt: await this.followedAt(ev.chatter_user_id)
     };
+    this.logins = this.logins || new Map(); this.logins.set(user.id, user.login);
+    if (this.logins.size > 2000) this.logins.delete(this.logins.keys().next().value);
     const own = !ev.source_broadcaster_user_id || ev.source_broadcaster_user_id === this.channel.id;
     const text = (ev.message && ev.message.text) || '';
     const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text, user, own });
@@ -296,7 +298,12 @@ class Bot {
       case 'blocked': return this.tracker.blockedList();
       case 'block': this.tracker.block(data.id, data.login); this.persist(); return true;
       case 'unblock': this.tracker.unblock(data.id); this.persist(); return true;
-      case 'timeouts': return this.tracker.timeouts(this.now());
+      case 'timeouts': return this.tracker.timeouts(this.now()).map((t) => ({ ...t, login: (this.logins && this.logins.get(t.id)) || '' }));
+      case 'blockLogin': {
+        const u = await this.helix.userByLogin(this.ids().chat, String(data.login || '').replace(/^@/, ''));
+        if (!u) throw new Error('нет такого зрителя на Twitch');
+        this.tracker.block(u.id, u.login); this.persist(); return true;
+      }
       case 'untimeout': this.tracker.clearTimeout(data.id); this.persist(); return true;
       default: throw new Error('неизвестная команда ' + cmd);
     }
