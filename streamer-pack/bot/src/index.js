@@ -1,8 +1,8 @@
 'use strict';
-// Точка входа модуля «Чат-бот Twitch». Пока — только логика; связь с Twitch и мост ядра подключаются позже
-// (см. docs/ARCHITECTURE.md).
+// Точка входа модуля «Чат-бот Twitch». Ядро вызывает activate(core) — см. docs/ARCHITECTURE.md.
 
 module.exports = {
+  ...require('./bot'),
   triggers: require('./logic/triggers'),
   replies: require('./logic/replies'),
   access: require('./logic/access'),
