@@ -13,7 +13,7 @@ const replies = require('./logic/replies');
 
 const DEFAULT_SETTINGS = {
   ...DEFAULT_CFG,
-  identity: 'bot',          // self — пишет от имени стримера; bot — от отдельного аккаунта
+  identity: 'self',         // self — пишет от имени стримера (по умолчанию); bot — от отдельного аккаунта
   pointsOn: true,
   reward: { title: 'Заказать песню', cost: 1000, prompt: 'Исполнитель — название или ссылка', color: '#FFB547', perUserPerStream: 2, cooldownSec: 0 },
   rewardId: null,
