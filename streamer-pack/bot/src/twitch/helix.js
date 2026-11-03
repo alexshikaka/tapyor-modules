@@ -17,6 +17,12 @@ class Helix {
         body: body ? JSON.stringify(body) : undefined
       });
       if (r.status === 401 && attempt === 0) continue;
+      if (r.status === 429 && attempt === 0) { // «слишком часто» — ждём, сколько просит Twitch, и пробуем ещё раз
+        const reset = Number(r.headers && r.headers.get && r.headers.get('ratelimit-reset')) * 1000;
+        const wait = Math.min(15000, Math.max(1000, reset ? reset - Date.now() : 2000));
+        this.log('Twitch: слишком частые запросы, жду ' + Math.round(wait / 1000) + ' с');
+        await new Promise((res) => setTimeout(res, wait)); continue;
+      }
       let data = null; if (r.status !== 204) { try { data = await r.json(); } catch (_) { /* пусто */ } }
       if (!r.ok) throw new TwitchError((data && data.message) || ('Twitch ответил ' + r.status), r.status, data);
       return data;

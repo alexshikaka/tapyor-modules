@@ -19,6 +19,18 @@ const DEFAULT_SETTINGS = {
   sendIntervalMs: 1100      // не чаще одного сообщения в ~секунду — лимиты Twitch
 };
 
+// Журнал — человеческим языком (для окна «Ответы и журнал»). Тексты чата живут только в журнале, не в логе Тапёра.
+const OUTCOME = {
+  queued: 'поставил в очередь', choose: 'переспросил: варианты', notFound: 'не нашёл — подсказал', rules: 'не прошёл правила',
+  closed: 'приём закрыт', offline: 'стрим не идёт', blocked: 'заблокирован — молча', timeout: 'тайм-аут ⛔', active: 'уже ждёт заказ',
+  pause: 'пауза', perStream: 'лимит за стрим', noAccess: 'нет доступа', outsideEvent: 'вне события', empty: 'пустой заказ',
+  queueFull: 'очередь полна', repeatWin: 'выиграл прошлое событие', shared: 'общий чат — чужой зритель',
+  'event-ok': 'событие: заявка принята', 'event-fail': 'событие: не нашёл — подсказал', 'event-already': 'событие: заявка уже есть',
+  'event-pending': 'событие: заявка ищется', 'event-closed': 'событие: уже закрыто',
+  'queued-doubt': 'в очередь с пометкой «сомнение»', 'refund-notFound': 'не нашёл — баллы вернул', 'refund-closed': 'приём закрыт — баллы вернул'
+};
+function outcomeText(o) { return OUTCOME[o] || (String(o).startsWith('refund-') ? 'баллы вернул (' + o.slice(7) + ')' : o); }
+
 class Bot {
   // deps (для тестов): fetch, WebSocket, now, rnd, setTimer, clearTimer, makeEventSub
   constructor(core, deps = {}) {
@@ -26,9 +38,9 @@ class Bot {
     this.deps = deps;
     this.now = deps.now || Date.now;
     this.log = (t) => { this.journalAdd('sys', t); core.log && core.log('бот: ' + t); };
+    this.journal = (core.journal && core.journal.load && core.journal.load()) || [];
     this.fetch = deps.fetch || globalThis.fetch;
     this.helix = new Helix({ fetch: this.fetch, log: this.log });
-    this.journal = [];
     this.outbox = []; this.sending = false;
     this.subs = [];
     this.channel = null; // { id, login }
@@ -50,6 +62,7 @@ class Bot {
   journalAdd(kind, text) {
     this.journal.push({ at: this.now(), kind, text });
     if (this.journal.length > 300) this.journal.shift();
+    if (this.core.journal && this.core.journal.append) this.core.journal.append(this.journal[this.journal.length - 1]);
   }
 
   // ---------- входы ----------
@@ -174,7 +187,7 @@ class Bot {
     if (type === 'channel.channel_points_custom_reward_redemption.add') {
       const r = { id: ev.id, at: Date.parse(ev.redeemed_at) || this.now(), input: ev.user_input || '', user: { id: ev.user_id, login: ev.user_login } };
       const out = await this.points.handle(r);
-      this.journalAdd('points', ev.user_login + ' · ' + r.input + ' → ' + out);
+      this.journalAdd('points', ev.user_login + ' · ' + r.input + ' → ' + outcomeText(out));
     }
   }
 
@@ -191,7 +204,7 @@ class Bot {
     const own = !ev.source_broadcaster_user_id || ev.source_broadcaster_user_id === this.channel.id;
     const text = (ev.message && ev.message.text) || '';
     const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text, user, own });
-    if (out !== 'ignore') { this.journalAdd('cmd', user.login + ' · ' + text + ' → ' + out); this.persist(); }
+    if (out !== 'ignore') { this.journalAdd('cmd', user.login + ' · ' + text + ' → ' + outcomeText(out)); this.persist(); }
   }
 
   // Фолловинг нужен, только если категория «Фолловеры» настроена иначе, чем «Зрители».
@@ -281,4 +294,4 @@ class Bot {
 
 async function activate(core, deps) { const bot = new Bot(core, deps); await bot.start(); return bot; }
 
-module.exports = { Bot, activate, DEFAULT_SETTINGS };
+module.exports = { Bot, activate, DEFAULT_SETTINGS, outcomeText };

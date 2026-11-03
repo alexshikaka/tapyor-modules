@@ -107,7 +107,7 @@ class Pipeline {
 
   async search(query, catalogsOnly) {
     const res = await this.limiter.run(() => this.core.findOrder(query, { catalogsOnly }));
-    if (res.timeout) { this.log('бот: поиск не уложился во время — «' + query + '»'); return { level: 'none' }; }
+    if (res.timeout) { this.log('поиск не уложился в 8 с'); return { level: 'none' }; } // текст зрителя в лог не пишем
     if (res.error) { this.log('бот: поиск — ' + (res.error.message || res.error)); return { level: 'none' }; }
     return res.value || { level: 'none' };
   }
@@ -137,7 +137,7 @@ class Pipeline {
 
   async enqueue(u, track, msgId, text) {
     const manual = this.cfg.approval === 'manual';
-    const res = this.core.orders.add({ prov: 'twitch-cmd', user: { id: u.id, login: u.login }, text, track, msgId, needsApproval: manual });
+    const res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: u.id, login: u.login }, text, track, msgId, needsApproval: manual });
     this.orders.set(res.id, u.id);
     this.tracker.onQueued(u.id, res.id, this.now());
     if (manual) await this.reply('awaiting', { ник: u.login, трек: trackLabel(track) }, msgId);
@@ -205,8 +205,8 @@ class Pipeline {
     return null;
   }
 
-  enqueueSilent(user, track, msgId, text) {
-    const res = this.core.orders.add({ prov: 'twitch-cmd', user: { id: user.id, login: user.login }, text, track, msgId, needsApproval: this.cfg.approval === 'manual' });
+  async enqueueSilent(user, track, msgId, text) {
+    const res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: user.id, login: user.login }, text, track, msgId, needsApproval: this.cfg.approval === 'manual' });
     this.orders.set(res.id, user.id);
     this.tracker.onQueued(user.id, res.id, this.now());
     return res;

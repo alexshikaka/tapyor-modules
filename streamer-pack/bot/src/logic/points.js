@@ -33,7 +33,7 @@ class Points {
     const rule = this.core.checkTrack(found.track);
     if (!rule.ok) return this.refund(r, rule.reason);
     const doubt = found.level !== 'exact'; // сомнение — ставим с пометкой стримеру, он решит
-    const o = this.core.orders.add({ prov: 'twitch-points', user: { id: r.user.id, login: r.user.login }, text: r.input, track: found.track, redemptionId: r.id, doubt, alts: found.alts || [] });
+    const o = await this.core.orders.add({ prov: 'twitch-points', user: { id: r.user.id, login: r.user.login }, text: r.input, track: found.track, redemptionId: r.id, doubt, alts: found.alts || [] });
     this.byOrder.set(o.id, { redemptionId: r.id, user: r.user });
     if (doubt) await this.reply('pointsDoubt', { ник: r.user.login });
     return doubt ? 'queued-doubt' : 'queued';

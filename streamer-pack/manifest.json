@@ -1,0 +1,9 @@
+{
+  "id": "streamer-pack",
+  "name": "Пак стримера",
+  "version": "0.1.0",
+  "minCore": "0.30.0",
+  "modules": [
+    { "id": "bot", "name": "Чат-бот Twitch", "sinceEdition": 1, "main": "bot/src/index.js" }
+  ]
+}
