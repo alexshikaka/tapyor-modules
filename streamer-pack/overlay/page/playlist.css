@@ -43,7 +43,7 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 
 /* Вертушка и время: каждый знак в клетке одной ширины — цифры не дёргаются */
 .sline { white-space: nowrap; overflow: hidden; }
-.sline span { display: inline-block; width: .62em; text-align: center; }
+.sline span { display: inline-block; width: .56em; text-align: center; }
 .sline.paused { animation: tapbl 1.2s steps(1) infinite; }
 @keyframes tapbl { 50% { opacity: .2; } }
 
