@@ -33,7 +33,8 @@ const OUTCOME = {
   'event-pending': 'событие: заявка ищется', 'event-closed': 'событие: уже закрыто',
   'queued-doubt': 'в очередь с пометкой «сомнение»', 'refund-notFound': 'не нашёл — баллы вернул', 'refund-closed': 'приём закрыт — баллы вернул'
 };
-function outcomeText(o) { return OUTCOME[o] || (String(o).startsWith('refund-') ? 'баллы вернул (' + o.slice(7) + ')' : o); }
+// Причина возврата — человеческим языком (как в чате), а не кодом правила.
+function outcomeText(o) { return OUTCOME[o] || (String(o).startsWith('refund-') ? 'баллы вернул (' + (replies.REASONS[String(o).slice(7)] || String(o).slice(7)) + ')' : o); }
 
 // Режим имитации зрителей — ТОЛЬКО для проверок (TAPYOR_BOT_SIM=1 при запуске из исходников).
 // Стример пишет в свой чат «#sim ник [vip] [mod] [sub] [follower] текст» — бот обрабатывает это как сообщение зрителя.
