@@ -219,7 +219,15 @@ class Bot {
     }
   }
 
-  async onChat(ev) {
+  // Сообщения обрабатываем последовательно: два заказа одного зрителя не должны
+  // проскочить проверку лимита «активных» одновременно.
+  onChat(ev) {
+    const prev = this.chatChain || Promise.resolve();
+    this.chatChain = prev.catch(() => {}).then(() => this._onChat(ev));
+    return this.chatChain;
+  }
+
+  async _onChat(ev) {
     const { chat } = this.ids();
     if (SIM && (ev.chatter_user_id === (this.channel && this.channel.id))) {
       const sim = parseSim(ev.message && ev.message.text);
