@@ -332,6 +332,7 @@ class Bot {
       case 'unblock': this.tracker.unblock(data.id); this.persist(); return true;
       case 'timeouts': return this.tracker.timeouts(this.now()).map((t) => ({ ...t, login: (this.logins && this.logins.get(t.id)) || '' }));
       case 'blockLogin': {
+        if (SIM && String(data.login || '').startsWith('sim:')) { const l = String(data.login).slice(4); this.tracker.block('sim-' + l, l); this.persist(); return true; } // имитация: «sim:ник»
         const u = await this.helix.userByLogin(this.ids().chat, String(data.login || '').replace(/^@/, ''));
         if (!u) throw new Error('нет такого зрителя на Twitch');
         this.tracker.block(u.id, u.login); this.persist(); return true;
