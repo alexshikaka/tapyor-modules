@@ -67,3 +67,48 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
   .tval.mq, .sline.paused { animation: none; }
   .head { transition: none; }
 }
+
+/* Типографика: крупное имя трека, тонкие столбики, круглый мини-ковер.
+   Все данные, позиция, очередь, затухание и остальные настройки — общие с DOS. */
+.ov.style-typography {
+  width: 340px;
+  font-family: 'Manrope', 'Onest', sans-serif;
+  font-size: 19px;
+  color: #fff;
+  gap: 5px;
+  -webkit-font-smoothing: antialiased;
+}
+.ov.style-typography .head { gap: 10px; align-items: center; }
+.ov.style-typography .cov {
+  width: 48px; height: 48px; flex: 0 0 48px;
+  border: 0; border-radius: 50%; overflow: hidden;
+  background: color-mix(in srgb, var(--c) 22%, #111);
+}
+.ov.style-typography .cov canvas { image-rendering: auto; border-radius: 50%; }
+.ov.style-typography .txt { flex: 1 1 auto; min-width: 0; }
+.ov.style-typography .tline { width: 100%; margin-left: 0; overflow: hidden; }
+.ov.style-typography .lab { display: none; }
+.ov.style-typography .tval {
+  font-size: 34px; line-height: 1; font-weight: 800;
+  letter-spacing: -.035em; white-space: pre;
+}
+.ov.style-typography .aline {
+  font-size: 19px; font-weight: 700; line-height: 1.15;
+  color: #fff; opacity: .9; white-space: nowrap;
+}
+.ov.style-typography[data-h="r"] .tline { margin-left: 0; justify-content: flex-end; }
+.ov.style-typography[data-h="r"] .aline { text-align: right; }
+.ov.style-typography[data-h="c"] .tline { margin-left: 0; justify-content: center; }
+.ov.style-typography[data-h="c"] .aline { text-align: center; }
+.ov.style-typography .sline { font-size: 13px; font-weight: 700; opacity: .72; }
+.ov.style-typography .osc {
+  height: 18px; gap: 2px; margin: 5px 0 2px;
+  border-top: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  padding-top: 4px;
+}
+.ov.style-typography .osc i { background: var(--c); border-radius: 1px; }
+.ov.style-typography .prog { height: 5px; gap: 2px; margin: 2px 0 3px; }
+.ov.style-typography .prog i { border-radius: 1px; }
+.ov.style-typography .queue { font-size: 19px; font-weight: 600; line-height: 1.35; border-top: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.ov.style-typography[data-v="b"] .queue { border-top: 0; border-bottom: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.ov.style-typography .queue div { white-space: pre; }

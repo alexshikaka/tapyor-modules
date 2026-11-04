@@ -34,6 +34,7 @@
   function applyCfg(cfg) {
     var pl = D.place(cfg.pos), st = D.boxStyle(cfg);
     ov.dataset.v = pl.v; ov.dataset.h = pl.h;
+    ov.classList.toggle('style-typography', cfg.style === 'typography');
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
     for (var k in st) ov.style[k] = st[k];
@@ -94,18 +95,19 @@
 
   function setText(np) {
     var L = D.labels(S.cfg.lang);
+    var typo = S.cfg && S.cfg.style === 'typography';
     var changed = np.title !== S.title || np.artist !== S.artist;
     var apply = function () {
       S.title = np.title; S.artist = np.artist;
-      labT.textContent = L.track;
-      aline.textContent = L.artist + (np.artist || '—');
+      labT.textContent = typo ? '' : L.track;
+      aline.textContent = typo ? (np.artist || '—') : (L.artist + (np.artist || '—'));
       S.fitKey = null; fitTitle();
     };
     if (changed && S.title !== null) {
       head.classList.add('swap');                         // плавная смена трека
       setTimeout(function () { apply(); head.classList.remove('swap'); }, 250);
     } else apply();
-    if (labT.textContent !== L.track) { labT.textContent = L.track; aline.textContent = L.artist + (np.artist || '—'); S.fitKey = null; }
+    if (!typo && labT.textContent !== L.track) { labT.textContent = L.track; aline.textContent = L.artist + (np.artist || '—'); S.fitKey = null; }
   }
 
   function renderQueue() {
@@ -141,7 +143,9 @@
     if (!np || !cfg) return;
     var now = Date.now(), pos = D.posAt(np, now), paused = !np.playing;
     if (!force) S.tick++;
-    var st = D.statusText({ lang: cfg.lang, paused: paused, spin: cfg.spin, time: cfg.time, pos: pos, dur: np.dur, tick: Math.floor(now / 150) });
+    var st = cfg.style === 'typography'
+      ? (cfg.time ? D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--') + (paused ? ' · ПАУЗА' : '') : '')
+      : D.statusText({ lang: cfg.lang, paused: paused, spin: cfg.spin, time: cfg.time, pos: pos, dur: np.dur, tick: Math.floor(now / 150) });
     if (st !== S.status) {
       S.status = st;
       sline.textContent = '';

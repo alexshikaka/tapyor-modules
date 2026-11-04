@@ -3,7 +3,7 @@
 // Хранятся в ядре под ключом mod.overlay (core.settings.get('overlay')).
 
 const POSITIONS = ['br', 'bc', 'bl', 'tr', 'tc', 'tl'];
-const STYLES = ['dos'];
+const STYLES = ['dos', 'typography'];
 const MAX_COUNT = 10;
 
 const DEFAULTS = Object.freeze({

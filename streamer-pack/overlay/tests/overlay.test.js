@@ -56,6 +56,10 @@ test('настройки: короткий цвет разворачиваетс
   assert.equal(normalize({ color: '#0f8' }).color, '#00FF88');
   assert.equal(normalize({ color: '#33ff66' }).color, '#33FF66');
 });
+test('настройки: стиль «Типографика» допустим, мусор — нет', () => {
+  assert.equal(normalize({ style: 'typography' }).style, 'typography');
+  assert.equal(normalize({ style: 'unknown' }).style, 'dos');
+});
 test('настройки: до 10 песен, 0 — только играющий', () => {
   assert.equal(normalize({ count: 0 }).count, 0);
   assert.equal(normalize({ count: 10 }).count, 10);
