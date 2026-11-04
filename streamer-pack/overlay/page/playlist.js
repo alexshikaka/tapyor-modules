@@ -12,10 +12,9 @@
   function $(id) { return document.getElementById(id); }
   var ov = $('ov'), head = $('head'), cv = $('cov'), tline = $('tline'), labT = $('labT'), tval = $('tval'), meas = $('meas'),
     aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue'),
-    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue'),
-    dosCanvas = $('dosCanvas'), tyCanvas = $('tyCanvas');
+    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue');
 
-  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, specHist: [], smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
+  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
     coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null, dosHeights: null };
 
   var bars = [], cells = [], tyBars = [], TY_OSC = 46;
@@ -40,9 +39,6 @@
     ov.dataset.v = pl.v; ov.dataset.h = pl.h;
     ov.classList.toggle('style-typography', cfg.style === 'typography');
     if (typo) typo.hidden = cfg.style !== 'typography';
-    var advanced = cfg.osc && cfg.viz === 'spectrumScroll';
-    ov.classList.toggle('viz-advanced', advanced);
-    if (S.vizPrev !== cfg.viz) { S.vizPrev = cfg.viz; S.specHist = []; }
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
     ov.style.setProperty('--v', cfg.vizColor || cfg.color);
@@ -160,40 +156,6 @@
     });
   }
 
-  function canvasReady(c) {
-    if (!c) return null;
-    var r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
-    var w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
-    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-    var g = c.getContext('2d'); if (!g) return null;
-    g.setTransform(d, 0, 0, d, 0, 0);
-    return { g: g, w: r.width, h: r.height };
-  }
-  function fakeSpec(now) {
-    var out = [];
-    for (var i = 0; i < 32; i++) out.push(Math.max(0.04, 0.15 + 0.85 * Math.abs(Math.sin(now / 700 + i * 0.37) * Math.cos(now / 1100 + i * 0.11))));
-    return out;
-  }
-  function drawWaterfall(now, cfg) {
-    if (!cfg.osc || cfg.viz !== 'spectrumScroll') return;
-    var c = cfg.style === 'typography' ? tyCanvas : dosCanvas;
-    var cv = canvasReady(c); if (!cv) return;
-    var sp = (S.spec && now - S.specAt < 1500) ? S.spec : fakeSpec(now);
-    S.specHist.push(sp); if (S.specHist.length > 90) S.specHist.shift();
-    var g = cv.g, W = cv.w, H = cv.h;
-    g.clearRect(0, 0, W, H);
-    g.fillStyle = cfg.vizColor || cfg.color || '#fff';
-    var cw = W / 90;
-    for (var x = 0; x < S.specHist.length; x++) {
-      var arr = S.specHist[x];
-      for (var b = 0; b < arr.length; b++) {
-        g.globalAlpha = 0.08 + Math.max(0, Math.min(1, arr[b])) * 0.85;
-        g.fillRect(x * cw, H - (b + 1) * H / arr.length, Math.max(1, cw - 1), H / arr.length + 0.5);
-      }
-    }
-    g.globalAlpha = 1;
-  }
-
   function current() { return DEMO ? demoNp() : S.np; }
 
   function render() {
@@ -257,7 +219,6 @@
         tyBars[ti].style.height = S.tyHeights[ti] + '%';
       }
     }
-    if (!paused) drawWaterfall(now, cfg);
   }
 
   // ----- связь с Тапёром -----
