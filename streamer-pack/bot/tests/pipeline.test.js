@@ -74,6 +74,13 @@ test('одно слово с вариантами: просит уточнить
   assert.equal(core.added.length, 1);
 });
 
+test('ручное одобрение без очереди занимает active и queueCap', async () => {
+  const { core, msg } = make({ approval: 'manual', queueCap: 1, limitsFromQueue: 1 });
+  assert.equal(await msg(user('a'), '!play кино группа крови'), 'queued');
+  assert.equal(core.added[0].needsApproval, true, 'заказ ждёт одобрения и не встал в очередь');
+  assert.equal(await msg(user('a'), '!play сплин море'), 'active');
+  assert.equal(await msg(user('b'), '!play сплин море'), 'queueFull');
+});
 test('одно слово с единственным точным совпадением можно', async () => {
   const { core, msg } = make();
   assert.equal(await msg(user('a'), '!play upast'), 'queued');
