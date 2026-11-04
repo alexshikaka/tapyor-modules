@@ -37,6 +37,15 @@ test('лимиты выключены при короткой очереди, н
   tr.block(u.id, 'a');
   assert.equal(tr.check(u, p, NOW + 20 * MIN, { limitsOn: false }).why, 'blocked');
 });
+test('reconcile убирает активные заказы, которых уже нет в очереди', () => {
+  const tr = new Tracker(); const u = user('a');
+  tr.onQueued(u.id, 'o1', NOW); tr.onQueued(u.id, 'o2', NOW + MIN);
+  assert.equal(tr.reconcile((id) => id === 'o2'), 1);
+  const p = policyFor(u, DEFAULT_ACCESS, NOW + 2 * MIN);
+  assert.equal(tr.check(u, p, NOW + 2 * MIN, { limitsOn: true }).why, 'active');
+  assert.equal(tr.reconcile(() => false), 1);
+  assert.equal(tr.check(u, p, NOW + 2 * MIN, { limitsOn: true }).ok, true);
+});
 test('⛔ и блоки переживают перезапуск', () => {
   const tr = new Tracker(); tr.timeout('u-a', 10, NOW); tr.block('u-b', 'b');
   const again = new Tracker(JSON.parse(JSON.stringify(tr.serialize())));

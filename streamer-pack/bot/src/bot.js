@@ -117,6 +117,7 @@ class Bot {
     this.tracker = new Tracker(this.core.settings.get('botState') || undefined);
     const say = (text, o = {}) => this.say(text, o.replyTo);
     this.pipeline = new Pipeline(s, { core: this.core, say, now: this.now, rnd: this.deps.rnd, log: this.log, tracker: this.tracker });
+    this.reconcileOrders();
     this.points = new Points({ accepting: s.accepting, pointsOn: s.pointsOn, replies: s.replies }, {
       core: this.core, say, log: this.log,
       twitch: { fulfill: (rid) => this.redemption(rid, 'FULFILLED'), cancel: (rid) => this.redemption(rid, 'CANCELED') }
@@ -145,6 +146,16 @@ class Bot {
 
   every(ms, fn) { const set = this.deps.setInterval || setInterval; this.timers.push(set(fn, ms)); }
   persist() { this.core.settings.set('botState', this.tracker.serialize()); }
+
+  // Сверяем «активные» заказы зрителей с тем, что реально осталось в очереди.
+  // Нужно после старта и после каждого обновления списка ключей из окна: старая версия
+  // при «Очистить» не присылала dropped, и заказ мог навсегда застрять в лимите.
+  reconcileOrders() {
+    if (!this.tracker || !this.core.orders || typeof this.core.orders.has !== 'function') return 0;
+    const dropped = this.tracker.reconcile((id) => this.core.orders.has(id));
+    if (dropped) { this.journalAdd('sys', 'очистил ' + dropped + ' зависших заказов'); this.persist(); }
+    return dropped;
+  }
 
   async restart() { this.disconnect(); await this.connect(); }
 

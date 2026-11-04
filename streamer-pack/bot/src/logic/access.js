@@ -92,6 +92,18 @@ class Tracker {
   onQueued(id, orderId, now) { const x = this.u(id); x.active.push(orderId); x.lastOrderAt = now; x.streamCount++; }
   onPlayed(id, orderId, now) { const x = this.u(id); x.active = x.active.filter((o) => o !== orderId); x.lastPlayedAt = now; }
   onDropped(id, orderId) { const x = this.u(id); x.active = x.active.filter((o) => o !== orderId); }
+  // Чистим «активные» заказы, которых уже нет в pending у ядра (например, очередь очистили
+  // старой версией окна, и событие dropped не дошло). Возвращаем number удалённых id.
+  reconcile(hasPending) {
+    if (typeof hasPending !== 'function') return 0;
+    let n = 0;
+    for (const x of this.users.values()) {
+      const before = x.active.length;
+      x.active = x.active.filter((id) => hasPending(id));
+      n += before - x.active.length;
+    }
+    return n;
+  }
 
   markWin(id, seq) { this.u(id).wonSeq = seq; }
   wonLast(id, seq) { const x = this.users.get(id); return !!x && x.wonSeq === seq; }
