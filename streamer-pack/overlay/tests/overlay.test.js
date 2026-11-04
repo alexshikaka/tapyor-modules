@@ -187,6 +187,12 @@ test('модуль: волна просит уровни звука и полу�
   core.player.emit('level', 0.7);
   assert.equal(res.chunks.some((c) => c.startsWith('event: lv')), true);
 });
+test('модуль: heartbeat будит зависший OBS-клиент', () => {
+  const core = fakeCore(); const o = new Overlay(core); o.start();
+  const res = fakeRes(); core.mounts['/overlay'](fakeReq(), res, '/events', new URLSearchParams());
+  o.ping();
+  assert.equal(res.chunks.some((c) => c.startsWith('event: hb')), true);
+});
 test('модуль: режим «Спектр» получает 32 полосы', () => {
   const core = fakeCore({ viz: 'spectrum' }); const o = new Overlay(core); o.start();
   const res = fakeRes(); core.mounts['/overlay'](fakeReq(), res, '/events', new URLSearchParams());

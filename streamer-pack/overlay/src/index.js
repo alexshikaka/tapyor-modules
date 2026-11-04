@@ -94,7 +94,7 @@ class Overlay {
     for (const cl of this.clients) this.send(cl, chunk);
   }
 
-  ping() { for (const cl of this.clients) this.send(cl, ': hb\n\n'); }
+  ping() { for (const cl of this.clients) this.send(cl, 'event: hb\ndata: 1\n\n'); }
 
   handle(req, res, sub, query) {
     const q = query || new URLSearchParams();

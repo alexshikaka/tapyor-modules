@@ -222,22 +222,38 @@
   }
 
   // ----- связь с Тапёром -----
-  var es = new EventSource('events' + (PREVIEW ? '?preview=1' : ''));
-  es.onmessage = function (e) {
-    var d; try { d = JSON.parse(e.data); } catch (x) { return; }
-    if (!d || !d.cfg) return;
-    var cfgChanged = JSON.stringify(d.cfg) !== JSON.stringify(S.cfg);
-    S.cfg = d.cfg; S.np = d.np || null; S.next = DEMO ? DEMO_NEXT : (d.next || []);
-    if (cfgChanged) applyCfg(S.cfg);
-    render();
-  };
-  es.addEventListener('lv', function (e) { S.lv = Math.max(0, Math.min(1, Number(e.data) || 0)); S.lvAt = Date.now(); });
-  es.addEventListener('spectrum', function (e) {
-    try {
-      var a = JSON.parse(e.data);
-      if (Array.isArray(a) && a.length) { S.spec = a.slice(0, 32).map(function (v){ return Math.max(0, Math.min(1, Number(v) || 0)); }); S.specAt = Date.now(); }
-    } catch (x) { /* битый пакет — остаёмся на волне */ }
-  });
+  // OBS держит страницу открытой, даже если Тапёр упал. EventSource сам переподключается,
+  // но зависшее TCP-соединение может не дать этого сделать — поэтому следим за heartbeat
+  // и раз в 5 секунд пересоздаём поток со свежим URL (сбрасывает и кэш ответа).
+  var es = null, lastSse = Date.now();
+  function connectEvents() {
+    if (es) { try { es.close(); } catch (x) {} }
+    var url = 'events?t=' + Date.now() + (PREVIEW ? '&preview=1' : '');
+    es = new EventSource(url);
+    es.onopen = function () { lastSse = Date.now(); };
+    es.onmessage = function (e) {
+      lastSse = Date.now();
+      var d; try { d = JSON.parse(e.data); } catch (x) { return; }
+      if (!d || !d.cfg) return;
+      var cfgChanged = JSON.stringify(d.cfg) !== JSON.stringify(S.cfg);
+      S.cfg = d.cfg; S.np = d.np || null; S.next = DEMO ? DEMO_NEXT : (d.next || []);
+      if (cfgChanged) applyCfg(S.cfg);
+      render();
+    };
+    es.addEventListener('lv', function (e) { lastSse = Date.now(); S.lv = Math.max(0, Math.min(1, Number(e.data) || 0)); S.lvAt = Date.now(); });
+    es.addEventListener('hb', function () { lastSse = Date.now(); });
+    es.addEventListener('spectrum', function (e) {
+      lastSse = Date.now();
+      try {
+        var a = JSON.parse(e.data);
+        if (Array.isArray(a) && a.length) { S.spec = a.slice(0, 32).map(function (v){ return Math.max(0, Math.min(1, Number(v) || 0)); }); S.specAt = Date.now(); }
+      } catch (x) { /* битый пакет — остаёмся на волне */ }
+    });
+  }
+  connectEvents();
+  setInterval(function () {
+    if (Date.now() - lastSse > 15000) connectEvents();
+  }, 5000);
 
   setInterval(function () { frame(false); }, TICK);
   if (DEMO) setInterval(render, 1000);
