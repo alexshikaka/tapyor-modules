@@ -187,6 +187,14 @@ test('модуль: волна просит уровни звука и полу�
   core.player.emit('level', 0.7);
   assert.equal(res.chunks.some((c) => c.startsWith('event: lv')), true);
 });
+test('модуль: режим «Спектр» получает 32 полосы', () => {
+  const core = fakeCore({ viz: 'spectrum' }); const o = new Overlay(core); o.start();
+  const res = fakeRes(); core.mounts['/overlay'](fakeReq(), res, '/events', new URLSearchParams());
+  core.player.emit('spectrum', [0.1, 0.5, 1.2, -1]);
+  const ev = res.chunks.filter((c) => c.startsWith('event: spectrum'));
+  assert.equal(ev.length, 1);
+  assert.deepEqual(JSON.parse(ev[0].slice(ev[0].indexOf('data: ') + 6).trim()), [0.1, 0.5, 1, 0]);
+});
 test('модуль: сохранение проверяет значения и сразу шлёт странице', () => {
   const core = fakeCore(); const o = new Overlay(core); o.start();
   const res = fakeRes(); core.mounts['/overlay'](fakeReq(), res, '/events', new URLSearchParams());
