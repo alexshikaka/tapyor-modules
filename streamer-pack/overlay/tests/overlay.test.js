@@ -60,8 +60,9 @@ test('настройки: стиль «Типографика» допустим
   assert.equal(normalize({ style: 'typography' }).style, 'typography');
   assert.equal(normalize({ style: 'unknown' }).style, 'dos');
 });
-test('настройки: режимы визуализатора волна/спектр', () => {
+test('настройки: режимы визуализатора волна/спектр/водопад', () => {
   assert.equal(normalize({ viz: 'spectrum' }).viz, 'spectrum');
+  assert.equal(normalize({ viz: 'spectrumScroll' }).viz, 'spectrumScroll');
   assert.equal(normalize({ viz: 'wave' }).viz, 'wave');
   assert.equal(normalize({ viz: 'real' }).viz, 'wave');
   assert.equal(normalize({ viz: 'fake' }).viz, 'wave');

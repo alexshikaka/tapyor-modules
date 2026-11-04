@@ -61,7 +61,7 @@ function normalize(raw) {
   out.fadePct = clampNum(r.fadePct, 0, 100, DEFAULTS.fadePct);
   for (const k of BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];
   if (r.lang === 'ru' || r.lang === 'en') out.lang = r.lang;
-  if (r.viz === 'spectrum') out.viz = 'spectrum';
+  if (r.viz === 'spectrum' || r.viz === 'spectrumScroll') out.viz = r.viz;
   else if (r.viz === 'wave' || r.viz === 'real' || r.viz === 'fake') out.viz = 'wave';
   if (['fast', 'mid', 'slow'].includes(r.smooth)) out.smooth = r.smooth;
   return out;

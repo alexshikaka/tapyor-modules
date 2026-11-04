@@ -84,7 +84,7 @@ class Overlay {
   }
 
   spectrum(x) {
-    if (!this.clients.size || this.cfg.viz !== 'spectrum' || !Array.isArray(x)) return;
+    if (!this.clients.size || (this.cfg.viz !== 'spectrum' && this.cfg.viz !== 'spectrumScroll') || !Array.isArray(x)) return;
     const arr = x.slice(0, 32).map((v) => Math.max(0, Math.min(1, Number(v) || 0)));
     this.spec = arr; this.specAt = Date.now();
     const chunk = 'event: spectrum\ndata: ' + JSON.stringify(arr) + '\n\n';
