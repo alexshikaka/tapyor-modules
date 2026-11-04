@@ -100,7 +100,8 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ov.style-typography[data-h="r"] .aline { text-align: right; }
 .ov.style-typography[data-h="c"] .tline { margin-left: 0; justify-content: center; }
 .ov.style-typography[data-h="c"] .aline { text-align: center; }
-.ov.style-typography .sline { font-size: 13px; font-weight: 700; opacity: .72; }
+.ov.style-typography .sline { display: none !important; }
+.ov.style-typography .prog { display: none !important; }
 .ov.style-typography .osc {
   height: 18px; gap: 2px; margin: 5px 0 2px;
   border-top: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
@@ -109,6 +110,6 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ov.style-typography .osc i { background: var(--c); border-radius: 1px; }
 .ov.style-typography .prog { height: 5px; gap: 2px; margin: 2px 0 3px; }
 .ov.style-typography .prog i { border-radius: 1px; }
-.ov.style-typography .queue { font-size: 19px; font-weight: 600; line-height: 1.35; border-top: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
-.ov.style-typography[data-v="b"] .queue { border-top: 0; border-bottom: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
+.ov.style-typography .queue { font-size: 19px; font-weight: 600; line-height: 1.35; border: 0; padding: 0; }
+.ov.style-typography[data-v="b"] .queue { border: 0; padding: 0; }
 .ov.style-typography .queue div { white-space: pre; }
