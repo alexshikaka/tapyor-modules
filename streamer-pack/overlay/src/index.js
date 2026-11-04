@@ -38,7 +38,6 @@ class Overlay {
     this.off.push(c.player.on('state', (s) => { this.snap = s; this.broadcast(); }));
     this.off.push(c.player.on('level', (x) => this.level(x)));
     this.off.push(c.player.on('spectrum', (x) => this.spectrum(x)));
-    this.off.push(c.player.on('wave', (x) => this.wave(x)));
     this.hb = setInterval(() => this.ping(), 4000);
     if (this.hb.unref) this.hb.unref();
     this.want();
@@ -85,17 +84,10 @@ class Overlay {
   }
 
   spectrum(x) {
-    if (!this.clients.size || (this.cfg.viz !== 'spectrum' && this.cfg.viz !== 'spectrumScroll') || !Array.isArray(x)) return;
+    if (!this.clients.size || this.cfg.viz !== 'spectrum' || !Array.isArray(x)) return;
     const arr = x.slice(0, 32).map((v) => Math.max(0, Math.min(1, Number(v) || 0)));
     this.spec = arr; this.specAt = Date.now();
     const chunk = 'event: spectrum\ndata: ' + JSON.stringify(arr) + '\n\n';
-    for (const cl of this.clients) this.send(cl, chunk);
-  }
-
-  wave(x) {
-    if (!this.clients.size || this.cfg.viz !== 'oscilloscope' || !Array.isArray(x)) return;
-    const arr = x.slice(0, 256).map((v) => Math.max(-1, Math.min(1, Number(v) || 0)));
-    const chunk = 'event: wave\ndata: ' + JSON.stringify(arr) + '\n\n';
     for (const cl of this.clients) this.send(cl, chunk);
   }
 
