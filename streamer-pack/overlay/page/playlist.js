@@ -12,7 +12,8 @@
   function $(id) { return document.getElementById(id); }
   var ov = $('ov'), head = $('head'), cv = $('cov'), tline = $('tline'), labT = $('labT'), tval = $('tval'), meas = $('meas'),
     aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue'),
-    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue');
+    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue'),
+    idle = $('idle');
 
   var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
     coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null, dosHeights: null };
@@ -161,7 +162,11 @@
   function render() {
     if (!S.cfg) return;
     var np = current();
-    ov.hidden = !np;                                      // ничего не играет — оверлея нет; на паузе — остаётся
+    // Пустой старт: не прячем оверлей полностью, а показываем «ТИШИНА».
+    // На паузе np остаётся — показываем трек и «ПАУЗА», как раньше.
+    ov.hidden = false;
+    ov.classList.toggle('idle-mode', !np);
+    if (idle) idle.hidden = !!np;
     if (!np) return;
     setText(np);
     if (S.cfg.cover) setCover(np.cover || '');

@@ -154,3 +154,9 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ov.style-typography .queue { font-size: 19px; font-weight: 600; line-height: 1.35; border: 0; padding: 0; }
 .ov.style-typography[data-v="b"] .queue { border: 0; padding: 0; }
 .ov.style-typography .queue div { white-space: pre; }
+
+/* Пустой оверлей: лучше показать «ТИШИНА», чем исчезнуть целиком. */
+.idle { display: none; color: var(--c); font-family: 'Pixelify Sans', monospace; font-size: 27px; font-weight: 600; letter-spacing: .06em; line-height: 1.1; padding: 6px 0; white-space: nowrap; }
+.ov.idle-mode > :not(.idle) { display: none !important; }
+.ov.idle-mode .idle { display: block; }
+.ov.style-typography.idle-mode .idle { font-family: 'Manrope', 'Onest', sans-serif; font-size: 34px; font-weight: 800; letter-spacing: -.02em; }
