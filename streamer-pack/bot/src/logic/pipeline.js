@@ -45,6 +45,7 @@ class Pipeline {
     this.lastSeq = -1;       // номер последнего закрытого события (для «не выигрывать два подряд»)
     this.choices = new Map(); // userId → { options, expires, user, msgId, text }
     this.orders = new Map();  // orderId → userId
+    this.clarify = new Map(); // userId → { expires, msgId } — ждём уточнение однословного заказа
   }
 
   reply(key, vars, replyTo) {
@@ -76,7 +77,21 @@ class Pipeline {
       }
     }
 
-    const p = triggers.parse(msg.text, c.triggers);
+    // Уточнение после однословного заказа: следующая строка того же зрителя —
+    // это уже запрос, команду повторять не нужно. Ждём не дольше минуты.
+    let p = null, fromClarify = false;
+    const cl = this.clarify.get(u.id);
+    if (cl) {
+      if (cl.expires <= at) this.clarify.delete(u.id);
+      else if (/^(отмена|cancel)$/i.test(String(msg.text || '').trim())) {
+        this.clarify.delete(u.id); this.reply('clarifyCancel', { ник: u.login }, msg.id); return 'clarifyCancel';
+      } else {
+        this.clarify.delete(u.id);
+        p = triggers.parse(msg.text, c.triggers);
+        if (!p) { p = { kind: 'clarify', query: String(msg.text || '').trim(), trigger: '' }; fromClarify = true; }
+      }
+    }
+    if (!p) p = triggers.parse(msg.text, c.triggers);
     if (!p) return 'ignore';
     const silent = p.kind === 'word'; // слова без «!» — ставим только точное, на ошибки молчим
     const r = (key, vars) => (silent ? null : this.reply(key, { ник: u.login, ...vars }, msg.id));
@@ -102,7 +117,7 @@ class Pipeline {
     if (!p.query) { r('notFound'); return 'empty'; }
 
     if (policy.access === 'event') return this.eventEntry(msg, u, p, silent, policy);
-    return this.alwaysOrder(msg, u, p, silent, policy);
+    return this.alwaysOrder(msg, u, p, silent, policy, fromClarify);
   }
 
   async search(query, catalogsOnly) {
@@ -112,10 +127,16 @@ class Pipeline {
     return res.value || { level: 'none' };
   }
 
-  async alwaysOrder(msg, u, p, silent, policy) {
+  async alwaysOrder(msg, u, p, silent, policy, fromClarify) {
     const r = (key, vars) => (silent ? null : this.reply(key, { ник: u.login, ...vars }, msg.id));
     if (!policy.unlimited && this.cfg.queueCap && this.twitchQueued() >= this.cfg.queueCap) { r('queueFull'); return 'queueFull'; }
     const found = await this.search(p.query, false);
+    const oneWord = String(p.query || '').trim().split(/\s+/).filter(Boolean).length === 1;
+    if (oneWord && found.level !== 'none' && (found.level !== 'exact' || (found.alts && found.alts.length))) {
+      this.clarify.set(u.id, { expires: this.now() + 60000, msgId: msg.id });
+      r('clarify', { ник: u.login });
+      return 'clarify';
+    }
     if (found.level === 'exact') {
       const rule = this.core.checkTrack(found.track);
       if (!rule.ok) { r('rules', { причина: replies.REASONS[rule.reason] || rule.reason }); return 'rules'; }

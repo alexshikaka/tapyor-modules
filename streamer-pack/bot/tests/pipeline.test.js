@@ -12,7 +12,10 @@ const CAT = {
   'лирика сектор': { level: 'doubt', track: LYR, alts: [LYRC] },
   'земфира искала': { level: 'exact', track: track('Земфира', 'Искала') },
   'сплин море': { level: 'exact', track: track('Сплин', 'Море') },
-  'ария беспечный ангел': { level: 'exact', track: track('Ария', 'Беспечный ангел') }
+  'ария беспечный ангел': { level: 'exact', track: track('Ария', 'Беспечный ангел') },
+  'upast': { level: 'exact', track: track('UPAST', 'UPAST') },
+  'human': { level: 'doubt', track: track('Human', 'Human'), alts: [track('Human', 'Human (remix)')] },
+  'human — song': { level: 'exact', track: track('Human', 'Song') }
 };
 
 function make(cfg = {}, coreOpts = {}) {
@@ -60,6 +63,21 @@ test('не нашёл — подсказка, как писать', async () => 
   const { said, msg } = make();
   await msg(user('nastya'), '!play ну ту песню с тиктока');
   assert.match(said[0].text, /исполнитель — название/);
+});
+
+test('одно слово с вариантами: просит уточнить, без команды', async () => {
+  const { core, said, msg } = make();
+  assert.equal(await msg(user('a'), '!play human'), 'clarify');
+  assert.equal(core.added.length, 0);
+  assert.match(said[0].text, /уточни: исполнитель — название/);
+  assert.equal(await msg(user('a'), 'human — song'), 'queued');
+  assert.equal(core.added.length, 1);
+});
+
+test('одно слово с единственным точным совпадением можно', async () => {
+  const { core, msg } = make();
+  assert.equal(await msg(user('a'), '!play upast'), 'queued');
+  assert.equal(core.added.length, 1);
 });
 
 test('правила ядра: причина человеческим языком', async () => {
