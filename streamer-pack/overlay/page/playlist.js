@@ -11,14 +11,16 @@
 
   function $(id) { return document.getElementById(id); }
   var ov = $('ov'), head = $('head'), cv = $('cov'), tline = $('tline'), labT = $('labT'), tval = $('tval'), meas = $('meas'),
-    aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue');
+    aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue'),
+    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue');
 
   var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
     coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null };
 
-  var bars = [], cells = [];
+  var bars = [], cells = [], tyBars = [], TY_OSC = 46;
   for (var i = 0; i < D.OSC; i++) { var b = document.createElement('i'); osc.appendChild(b); bars.push(b); S.hist.push(1); }
   for (var j = 0; j < D.CELLS; j++) { var c = document.createElement('i'); prog.appendChild(c); cells.push(c); }
+  for (var t = 0; t < TY_OSC; t++) { var tb = document.createElement('i'); tyOsc.appendChild(tb); tyBars.push(tb); }
 
   // ----- демо-трек (превью без живых данных) -----
   var DEMO_AT = Date.now();
@@ -35,6 +37,7 @@
     var pl = D.place(cfg.pos), st = D.boxStyle(cfg);
     ov.dataset.v = pl.v; ov.dataset.h = pl.h;
     ov.classList.toggle('style-typography', cfg.style === 'typography');
+    if (typo) typo.hidden = cfg.style !== 'typography';
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
     for (var k in st) ov.style[k] = st[k];
@@ -47,8 +50,9 @@
   }
 
   // ----- обложка: пикселизуем под стиль (16×16), нет обложки — пластинка в цвет терминала -----
-  function drawDisc() {
-    var g = cv.getContext('2d'), col = (S.cfg && S.cfg.color) || '#FFB000', dark = '#140C00';
+  function drawDiscOn(canvas) {
+    if (!canvas) return;
+    var g = canvas.getContext('2d'), col = (S.cfg && S.cfg.color) || '#FFB000', dark = '#140C00';
     g.fillStyle = dark; g.fillRect(0, 0, 16, 16);
     g.fillStyle = col;
     [[5, 0, 6, 1], [3, 1, 10, 1], [2, 2, 12, 1], [1, 3, 14, 2], [0, 5, 16, 6], [1, 11, 14, 2], [2, 13, 12, 1], [3, 14, 10, 1], [5, 15, 6, 1]]
@@ -60,6 +64,7 @@
     g.globalAlpha = 1;
     g.fillStyle = col; g.fillRect(7, 7, 2, 2);
   }
+  function drawDisc() { drawDiscOn(cv); drawDiscOn(tyCov); }
   function setCover(url) {
     if (url === S.coverUrl) return;
     S.coverUrl = url; S.coverOk = false;
@@ -72,6 +77,7 @@
       var s = Math.min(img.naturalWidth, img.naturalHeight) || 1;
       g.clearRect(0, 0, 16, 16);
       g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, 16, 16);
+      if (tyCov) { var tg = tyCov.getContext('2d'); tg.clearRect(0, 0, 16, 16); tg.imageSmoothingEnabled = true; tg.drawImage(cv, 0, 0); }
       S.coverOk = true;
     };
     img.onerror = function () { if (S.coverUrl === url) drawDisc(); };
@@ -101,6 +107,8 @@
       S.title = np.title; S.artist = np.artist;
       labT.textContent = typo ? '' : L.track;
       aline.textContent = typo ? (np.artist || '—') : (L.artist + (np.artist || '—'));
+      if (tyTitle) tyTitle.textContent = np.title || '';
+      if (tyArtist) tyArtist.textContent = np.artist || '—';
       S.fitKey = null; fitTitle();
     };
     if (changed && S.title !== null) {
@@ -112,15 +120,23 @@
 
   function renderQueue() {
     var cfg = S.cfg, list = (S.next || []).slice(0, cfg.count);
-    var sig = JSON.stringify(list) + cfg.nums;
+    var sig = JSON.stringify(list) + cfg.nums + cfg.fade + cfg.fadePct;
     if (sig === S.queueSig) return;
     S.queueSig = sig;
     queue.textContent = '';
+    if (tyQueue) tyQueue.textContent = '';
     list.forEach(function (it, i) {
       var d = document.createElement('div');
       d.textContent = D.rowText(it, i, cfg.nums);
       d.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
       queue.appendChild(d);
+      if (tyQueue) {
+        var td = document.createElement('div');
+        td.textContent = (cfg.nums ? (i + 1) + '. ' : '') + (it.title || '');
+        if (it.artist) { var a = document.createElement('b'); a.textContent = it.artist; td.appendChild(a); }
+        td.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
+        tyQueue.appendChild(td);
+      }
     });
   }
 
@@ -161,6 +177,7 @@
       S.smooth += (lv - S.smooth) * D.smoothAlpha(cfg.smooth);
       S.hist.shift(); S.hist.push(D.barSteps(S.smooth));
       for (var k = 0; k < bars.length; k++) bars[k].style.height = (S.hist[k] * 12.5) + '%';
+      for (var ti = 0; ti < tyBars.length; ti++) tyBars[ti].style.height = (S.hist[Math.min(ti, S.hist.length - 1)] * 12.5) + '%';
     }
   }
 

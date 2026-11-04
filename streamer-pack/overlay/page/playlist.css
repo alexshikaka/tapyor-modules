@@ -68,8 +68,35 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
   .head { transition: none; }
 }
 
-/* Типографика: крупное имя трека, тонкие столбики, круглый мини-ковер.
-   Все данные, позиция, очередь, затухание и остальные настройки — общие с DOS. */
+/* Типографика: отдельный слой, DOS-разметка полностью скрыта. */
+.ov.style-typography > .head,
+.ov.style-typography > .osc,
+.ov.style-typography > .prog,
+.ov.style-typography > .queue { display: none !important; }
+.ov:not(.style-typography) > #typo { display: none !important; }
+#typo[hidden] { display: none !important; }
+.typo { display: flex; flex-direction: column; gap: 6px; width: 100%; color: #fff; }
+.ty-head { display: flex; align-items: center; gap: 10px; }
+.ov[data-h="r"] .ty-head { flex-direction: row-reverse; }
+.ov[data-h="c"] .ty-head { justify-content: center; }
+.ty-cov { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 50%; overflow: hidden; background: #111; }
+.ty-cov canvas { display: block; width: 100%; height: 100%; image-rendering: auto; border-radius: 50%; }
+.ov.nocov .ty-cov { display: none; }
+.ty-txt { flex: 1 1 auto; min-width: 0; }
+.ty-title { font-size: 34px; line-height: 1; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.ty-artist { font-size: 19px; line-height: 1.15; font-weight: 700; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov[data-h="r"] .ty-txt { text-align: right; }
+.ov[data-h="c"] .ty-txt { text-align: center; }
+.ty-osc { display: flex; gap: 2px; height: 22px; align-items: flex-end; margin-top: 3px; }
+.ty-osc i { flex: 1; display: block; height: 12.5%; background: var(--c); border-radius: 1px; }
+.ty-queue { display: flex; flex-direction: column; gap: 0; font-size: 19px; line-height: 1.35; font-weight: 600; }
+.ov[data-v="b"] .ty-queue { flex-direction: column-reverse; }
+.ty-queue div { white-space: nowrap; overflow: hidden; }
+.ty-queue b { font-weight: 800; opacity: .82; margin-left: .35em; }
+.ov.outline .typo { text-shadow: 0 2px 6px rgba(0,0,0,.55); -webkit-text-stroke: 4px rgba(0,0,0,.85); paint-order: stroke fill; }
+.ov.outline .ty-cov, .ov.outline .ty-osc i { box-shadow: 0 0 0 1.5px rgba(0,0,0,.6); }
+
+/* Старые правила ниже оставлены для совместимости; .typo использует свои. */
 .ov.style-typography {
   width: 340px;
   font-family: 'Manrope', 'Onest', sans-serif;
