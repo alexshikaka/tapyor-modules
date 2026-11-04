@@ -14,8 +14,8 @@
     aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue'),
     typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue');
 
-  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
-    coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null };
+  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
+    coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null, dosHeights: null };
 
   var bars = [], cells = [], tyBars = [], TY_OSC = 46;
   for (var i = 0; i < D.OSC; i++) { var b = document.createElement('i'); osc.appendChild(b); bars.push(b); S.hist.push(1); }
@@ -187,23 +187,34 @@
     }
     var n = D.progressCount(pos, np.dur, D.CELLS);
     if (n !== S.prog) { S.prog = n; for (var i = 0; i < cells.length; i++) cells[i].classList.toggle('on', i < n); }
-    if (cfg.osc && !paused && !force && S.tick % 2 === 0) {
-      var real = cfg.viz === 'real' && now - S.lvAt < 1500;
-      var lv = real ? S.lv : D.imitation(now / 300, Math.random());
-      S.smooth += (lv - S.smooth) * D.smoothAlpha(cfg.smooth);
-      S.hist.shift(); S.hist.push(D.barSteps(S.smooth));
-      for (var k = 0; k < bars.length; k++) bars[k].style.height = (S.hist[k] * 12.5) + '%';
+    var specActive = cfg.viz === 'spectrum' && S.spec && now - S.specAt < 1500;
+    if (cfg.osc && !paused && !force) {
+      if (specActive) {
+        if (!S.dosHeights) S.dosHeights = bars.map(function(){ return 1; });
+        for (var k = 0; k < bars.length; k++) {
+          var sv = S.spec[Math.floor(k * S.spec.length / bars.length)] * 100;
+          S.dosHeights[k] += (Math.max(4, sv) - S.dosHeights[k]) * 0.32;
+          bars[k].style.height = S.dosHeights[k] + '%';
+        }
+      } else if (S.tick % 2 === 0) {
+        var real = now - S.lvAt < 1500;
+        var lv = real ? S.lv : D.imitation(now / 300, Math.random());
+        S.smooth += (lv - S.smooth) * D.smoothAlpha(cfg.smooth);
+        S.hist.shift(); S.hist.push(D.barSteps(S.smooth));
+        for (var kb = 0; kb < bars.length; kb++) bars[kb].style.height = (S.hist[kb] * 12.5) + '%';
+      }
     }
-    // Типографика: 46 столбиков сглаживаются каждый кадр, а не прыгают раз в 180 мс.
-    // Волна считается по фазе и отражается CSS-трансформом у верхнего края.
+    // Типографика: спектр — реальные полосы; волна — фаза + общий уровень.
     if (cfg.osc && !paused) {
-      var realTy = cfg.viz === 'real' && now - S.lvAt < 1500;
       var phase = now / 620;
-      var level = realTy ? Math.max(0.25, Math.min(1, S.lv)) : 1;
+      var level = (now - S.lvAt < 1500) ? Math.max(0.25, Math.min(1, S.lv)) : 1;
       for (var ti = 0; ti < tyBars.length; ti++) {
-        var wave = 0.5 + 0.5 * Math.sin(phase * 2.1 + ti * 0.56) * Math.cos(phase * 0.73 + ti * 0.17);
-        // уровень звука — общая громкость, фаза — индивидуальная высота столбика
-        var target = Math.max(8, Math.min(100, (0.10 + 0.90 * wave * level) * 100));
+        var target;
+        if (specActive) target = Math.max(4, S.spec[Math.floor(ti * S.spec.length / tyBars.length)] * 100);
+        else {
+          var wave = 0.5 + 0.5 * Math.sin(phase * 2.1 + ti * 0.56) * Math.cos(phase * 0.73 + ti * 0.17);
+          target = Math.max(8, Math.min(100, (0.10 + 0.90 * wave * level) * 100));
+        }
         S.tyHeights[ti] += (target - S.tyHeights[ti]) * 0.24;
         tyBars[ti].style.height = S.tyHeights[ti] + '%';
       }
@@ -221,6 +232,12 @@
     render();
   };
   es.addEventListener('lv', function (e) { S.lv = Math.max(0, Math.min(1, Number(e.data) || 0)); S.lvAt = Date.now(); });
+  es.addEventListener('spectrum', function (e) {
+    try {
+      var a = JSON.parse(e.data);
+      if (Array.isArray(a) && a.length) { S.spec = a.slice(0, 32).map(function (v){ return Math.max(0, Math.min(1, Number(v) || 0)); }); S.specAt = Date.now(); }
+    } catch (x) { /* битый пакет — остаёмся на волне */ }
+  });
 
   setInterval(function () { frame(false); }, TICK);
   if (DEMO) setInterval(render, 1000);

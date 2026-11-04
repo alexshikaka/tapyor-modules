@@ -27,7 +27,7 @@ const DEFAULTS = Object.freeze({
   prog: true,
   marq: true,
   lang: 'en',         // подписи TRACK/ARTIST или ТРЕК/АРТИСТ
-  viz: 'real',        // real — уровни звука из Тапёра, fake — имитация
+  viz: 'wave',        // wave — текущая волна; spectrum — реальные 32 полосы из Тапёра
   smooth: 'mid'       // fast | mid | slow
 });
 
@@ -61,7 +61,8 @@ function normalize(raw) {
   out.fadePct = clampNum(r.fadePct, 0, 100, DEFAULTS.fadePct);
   for (const k of BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];
   if (r.lang === 'ru' || r.lang === 'en') out.lang = r.lang;
-  if (r.viz === 'real' || r.viz === 'fake') out.viz = r.viz;
+  if (r.viz === 'spectrum') out.viz = 'spectrum';
+  else if (r.viz === 'wave' || r.viz === 'real' || r.viz === 'fake') out.viz = 'wave';
   if (['fast', 'mid', 'slow'].includes(r.smooth)) out.smooth = r.smooth;
   return out;
 }

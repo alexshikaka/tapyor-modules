@@ -49,7 +49,7 @@ test('настройки: пусто → значения по умолчани�
 test('настройки: мусор отбрасывается, числа зажимаются', () => {
   const c = normalize({ pos: 'zz', size: 999, count: 50, dx: 'abc', color: 'red', lang: 'de', viz: 'x', outline: 'да', evil: 1 });
   assert.equal(c.pos, 'br'); assert.equal(c.size, 150); assert.equal(c.count, 10); assert.equal(c.dx, 0);
-  assert.equal(c.color, '#FFB000'); assert.equal(c.lang, 'en'); assert.equal(c.viz, 'real'); assert.equal(c.outline, true);
+  assert.equal(c.color, '#FFB000'); assert.equal(c.lang, 'en'); assert.equal(c.viz, 'wave'); assert.equal(c.outline, true);
   assert.equal('evil' in c, false);
 });
 test('настройки: короткий цвет разворачивается, регистр — верхний', () => {
@@ -59,6 +59,12 @@ test('настройки: короткий цвет разворачиваетс
 test('настройки: стиль «Типографика» допустим, мусор — нет', () => {
   assert.equal(normalize({ style: 'typography' }).style, 'typography');
   assert.equal(normalize({ style: 'unknown' }).style, 'dos');
+});
+test('настройки: режимы визуализатора волна/спектр', () => {
+  assert.equal(normalize({ viz: 'spectrum' }).viz, 'spectrum');
+  assert.equal(normalize({ viz: 'wave' }).viz, 'wave');
+  assert.equal(normalize({ viz: 'real' }).viz, 'wave');
+  assert.equal(normalize({ viz: 'fake' }).viz, 'wave');
 });
 test('настройки: цвет текста и визуализатора независимы', () => {
   assert.equal(normalize({ color: '#33ff66' }).vizColor, '#33FF66');
@@ -174,12 +180,12 @@ test('модуль: превью в настройках не считается
   core.mounts['/overlay'](fakeReq(), fakeRes(), '/events', new URLSearchParams('preview=1'));
   assert.equal(o.command('status').obs, 0); assert.equal(o.command('status').clients, 1);
 });
-test('модуль: «имитация» — уровни звука не нужны и не шлются', () => {
-  const core = fakeCore({ viz: 'fake' }); const o = new Overlay(core); o.start();
+test('модуль: волна просит уровни звука и получает их', () => {
+  const core = fakeCore({ viz: 'wave' }); const o = new Overlay(core); o.start();
   const res = fakeRes(); core.mounts['/overlay'](fakeReq(), res, '/events', new URLSearchParams());
-  assert.deepEqual(core.wants.pop(), { state: true, levels: false });
+  assert.deepEqual(core.wants.pop(), { state: true, levels: true });
   core.player.emit('level', 0.7);
-  assert.equal(res.chunks.some((c) => c.startsWith('event: lv')), false);
+  assert.equal(res.chunks.some((c) => c.startsWith('event: lv')), true);
 });
 test('модуль: сохранение проверяет значения и сразу шлёт странице', () => {
   const core = fakeCore(); const o = new Overlay(core); o.start();

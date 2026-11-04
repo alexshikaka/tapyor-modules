@@ -27,6 +27,8 @@ class Overlay {
     this.obsWas = 0;
     this.off = [];
     this.hb = null;
+    this.spec = null;
+    this.specAt = 0;
   }
 
   start() {
@@ -35,6 +37,7 @@ class Overlay {
     c.http.mount('/overlay', (req, res, sub, query) => this.handle(req, res, sub, query));
     this.off.push(c.player.on('state', (s) => { this.snap = s; this.broadcast(); }));
     this.off.push(c.player.on('level', (x) => this.level(x)));
+    this.off.push(c.player.on('spectrum', (x) => this.spectrum(x)));
     this.hb = setInterval(() => this.ping(), 4000);
     if (this.hb.unref) this.hb.unref();
     this.want();
@@ -55,7 +58,7 @@ class Overlay {
   // Ядро шлёт состояние плеера и уровни звука, только пока страницу кто-то смотрит
   want() {
     const any = this.clients.size > 0;
-    this.core.player.want({ state: any, levels: any && this.cfg.viz === 'real' && this.cfg.osc });
+    this.core.player.want({ state: any, levels: any && this.cfg.osc });
     const obs = this.obsCount();
     if (obs !== this.obsWas) {
       this.core.log('оверлей: источников OBS — ' + obs);
@@ -74,9 +77,17 @@ class Overlay {
   }
 
   level(x) {
-    if (!this.clients.size || this.cfg.viz !== 'real') return;
+    if (!this.clients.size) return;
     const v = Math.max(0, Math.min(1, Number(x) || 0));
     const chunk = 'event: lv\ndata: ' + v.toFixed(3) + '\n\n';
+    for (const cl of this.clients) this.send(cl, chunk);
+  }
+
+  spectrum(x) {
+    if (!this.clients.size || this.cfg.viz !== 'spectrum' || !Array.isArray(x)) return;
+    const arr = x.slice(0, 32).map((v) => Math.max(0, Math.min(1, Number(v) || 0)));
+    this.spec = arr; this.specAt = Date.now();
+    const chunk = 'event: spectrum\ndata: ' + JSON.stringify(arr) + '\n\n';
     for (const cl of this.clients) this.send(cl, chunk);
   }
 
@@ -99,6 +110,7 @@ class Overlay {
       res.write('retry: 2000\n\n');
       this.clients.add(cl);
       this.send(cl, 'data: ' + JSON.stringify(this.feed()) + '\n\n');
+      if (this.spec && Date.now() - this.specAt < 1500) this.send(cl, 'event: spectrum\ndata: ' + JSON.stringify(this.spec) + '\n\n');
       this.want();
       if (!cl.preview) this.broadcast();         // окно настроек видит «OBS подключён» сразу
       req.on('close', () => { this.clients.delete(cl); this.want(); this.broadcast(); });
