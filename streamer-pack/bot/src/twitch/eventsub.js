@@ -12,11 +12,12 @@ class EventSub extends EventEmitter {
     this.subscribeFn = subscribe; this.WS = WebSocket; this.url = url; this.log = log;
     this.setTimer = setTimer; this.clearTimer = clearTimer;
     this.ws = null; this.sessionId = null; this.stopped = true; this.retry = 0; this.kaTimer = null; this.kaSec = 10;
+    this.welcomeTimer = null; this.retryTimer = null;
     this.seen = new Set(); // id уведомлений: Twitch может прислать одно и то же дважды
   }
 
   start() { this.stopped = false; this.open(this.url, false); }
-  stop() { this.stopped = true; this.clearTimer(this.kaTimer); if (this.ws) try { this.ws.close(); } catch (_) {} this.ws = null; this.setState('off'); }
+  stop() { this.stopped = true; this.clearTimer(this.kaTimer); this.clearTimer(this.welcomeTimer); this.clearTimer(this.retryTimer); if (this.ws) try { this.ws.close(); } catch (_) {} this.ws = null; this.setState('off'); }
 
   setState(s) { if (this.state !== s) { this.state = s; this.emit('state', s); } }
 
@@ -25,6 +26,8 @@ class EventSub extends EventEmitter {
     const prev = this.ws;
     this.ws = ws;
     this.setState(isReconnect ? 'reconnecting' : 'connecting');
+    this.clearTimer(this.welcomeTimer);
+    this.welcomeTimer = this.setTimer(() => { if (ws === this.ws) this.onDrop('welcome'); }, 15000);
     ws.onmessage = (ev) => this.onMessage(ws, ev.data, isReconnect, prev);
     ws.onclose = () => { if (ws === this.ws) this.onDrop('closed'); };
     ws.onerror = () => { if (ws === this.ws) this.log('Twitch: ошибка соединения'); };
@@ -38,17 +41,19 @@ class EventSub extends EventEmitter {
 
   onDrop(why) {
     if (this.stopped) return;
-    this.clearTimer(this.kaTimer);
+    this.clearTimer(this.kaTimer); this.clearTimer(this.welcomeTimer);
     try { this.ws && this.ws.close(); } catch (_) {}
     this.ws = null; this.sessionId = null;
     this.setState('down');
     const delay = Math.min(60000, 1000 * Math.pow(2, this.retry++));
     this.log('Twitch: соединение потеряно (' + why + '), переподключаюсь через ' + Math.round(delay / 1000) + ' с');
-    this.setTimer(() => { if (!this.stopped) this.open(this.url, false); }, delay);
+    this.clearTimer(this.retryTimer);
+    this.retryTimer = this.setTimer(() => { if (!this.stopped) this.open(this.url, false); }, delay);
   }
 
   async onMessage(ws, raw, isReconnect, prev) {
     if (ws !== this.ws) return;
+    this.clearTimer(this.welcomeTimer);
     let m; try { m = JSON.parse(typeof raw === 'string' ? raw : raw.toString()); } catch (_) { return; }
     const type = m.metadata && m.metadata.message_type;
     this.armKeepalive();

@@ -61,6 +61,18 @@ class Pipeline {
 
   twitchQueued() { return this.core.orders.count('twitch-cmd'); }
 
+  // Повторная проверка перед выбором «1)/2)»: пока зритель думал, приём могли закрыть,
+  // стрим закончиться, а лимит — снова стать активным.
+  choiceBlock(u, c, at) {
+    if (!c.accepting || !c.commandsOn) return 'closed';
+    if (c.onlyLive && !this.online && !u.isBroadcaster) return 'offline';
+    const policy = policyFor(u, c.access, at);
+    const limitsOn = !c.limitsFromQueue || this.twitchQueued() >= c.limitsFromQueue;
+    const chk = this.tracker.check(u, policy, at, { pauseFrom: c.pauseFrom, limitsOn });
+    if (!chk.ok) return chk.why;
+    return '';
+  }
+
   // ---------- сообщение чата ----------
   // msg: { id, at, text, own (из своего канала), user: { id, login, isBroadcaster, isMod, isVip, isSub, followedAt } }
   async handle(msg) {
@@ -73,7 +85,16 @@ class Pipeline {
       if (pend.expires <= at) this.choices.delete(u.id);
       else {
         const n = triggers.parseChoice(msg.text, c.triggers, pend.options.length);
-        if (n) { this.choices.delete(u.id); return this.enqueue(u, pend.options[n - 1], pend.msgId, pend.text); }
+        if (n) {
+          const block = this.choiceBlock(u, c, at);
+          if (block) {
+            const key = { timeout: 'timeout', active: 'active', pause: 'pause', perStream: 'perStream' }[block] || block;
+            this.reply(key, { ник: u.login }, msg.id);
+            return block;
+          }
+          this.choices.delete(u.id);
+          return this.enqueue(u, pend.options[n - 1], pend.msgId, pend.text);
+        }
       }
     }
 
@@ -158,7 +179,13 @@ class Pipeline {
 
   async enqueue(u, track, msgId, text) {
     const manual = this.cfg.approval === 'manual';
-    const res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: u.id, login: u.login }, text, track, msgId, needsApproval: manual });
+    let res;
+    try {
+      res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: u.id, login: u.login }, text, track, msgId, needsApproval: manual });
+    } catch (e) {
+      this.log('бот: заказ не создан — ' + (e && e.message || e));
+      return 'error';
+    }
     this.orders.set(res.id, u.id);
     this.tracker.onQueued(u.id, res.id, this.now());
     if (manual) await this.reply('awaiting', { ник: u.login, трек: trackLabel(track) }, msgId);
@@ -227,7 +254,13 @@ class Pipeline {
   }
 
   async enqueueSilent(user, track, msgId, text) {
-    const res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: user.id, login: user.login }, text, track, msgId, needsApproval: this.cfg.approval === 'manual' });
+    let res;
+    try {
+      res = await this.core.orders.add({ prov: 'twitch-cmd', user: { id: user.id, login: user.login }, text, track, msgId, needsApproval: this.cfg.approval === 'manual' });
+    } catch (e) {
+      this.log('бот: заказ не создан — ' + (e && e.message || e));
+      return null;
+    }
     this.orders.set(res.id, user.id);
     this.tracker.onQueued(user.id, res.id, this.now());
     return res;

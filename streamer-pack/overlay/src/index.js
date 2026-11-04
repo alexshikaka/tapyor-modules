@@ -68,7 +68,10 @@ class Overlay {
 
   feed() { return { ...buildFeed(this.cfg, this.snap), obs: this.obsCount() }; }
 
-  send(cl, chunk) { try { cl.res.write(chunk); } catch (e) { this.clients.delete(cl); } }
+  send(cl, chunk) {
+    try { cl.res.write(chunk); }
+    catch (e) { if (this.clients.delete(cl)) this.want(); }
+  }
 
   broadcast() {
     if (!this.clients.size) return;
@@ -105,10 +108,12 @@ class Overlay {
       return;
     }
     if (sub === '/events') {
+      if (this.clients.size >= 8) { res.writeHead(503); res.end('too many clients'); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
       const cl = { res, preview: q.get('preview') === '1' };
       res.write('retry: 2000\n\n');
       this.clients.add(cl);
+      if (typeof res.on === 'function') res.on('error', () => { if (this.clients.delete(cl)) this.want(); });
       this.send(cl, 'data: ' + JSON.stringify(this.feed()) + '\n\n');
       if (this.spec && Date.now() - this.specAt < 1500) this.send(cl, 'event: spectrum\ndata: ' + JSON.stringify(this.spec) + '\n\n');
       this.want();

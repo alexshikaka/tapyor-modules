@@ -161,9 +161,17 @@ class Bot {
 
   async connect() {
     const s = this.settings(), { broadcaster, chat } = this.ids();
-    await broadcaster.load(); if (chat !== broadcaster) await chat.load();
-    if (!chat.connected) { this.health('login', 'warn', 'не подключён', 'login'); return false; }
-    this.channel = broadcaster.connected ? broadcaster.user : (s.channelLogin ? await this.helix.userByLogin(chat, s.channelLogin) : null);
+    let channel = null;
+    try {
+      await broadcaster.load(); if (chat !== broadcaster) await chat.load();
+      if (!chat.connected) { this.health('login', 'warn', 'не подключён', 'login'); return false; }
+      channel = broadcaster.connected ? broadcaster.user : (s.channelLogin ? await this.helix.userByLogin(chat, s.channelLogin) : null);
+    } catch (e) {
+      this.health('login', 'warn', 'не удалось загрузить вход — войди заново', 'login');
+      this.log('бот: connect — ' + (e && e.message || e));
+      return false;
+    }
+    this.channel = channel;
     if (!this.channel) { this.health('login', 'warn', 'войди как стример или укажи канал', 'login'); return false; }
     this.health('login', 'ok', chat === broadcaster ? chat.user.login : chat.user.login + ' · ' + this.channel.login);
 
@@ -204,6 +212,11 @@ class Bot {
       if (line === 'points' && st === 'up') this.health('points', 'ok', 'награда активна');
     });
     es.on('subscribeError', (e) => { if (line === 'points' || e.status === 403) this.health('points', 'warn', e.status === 403 ? 'баллы канала недоступны (нужен компаньон или партнёр)' : 'не подписался', 'login-broadcaster'); });
+    es.on('revoked', () => {
+      const msg = 'Twitch отозвал доступ — войди заново';
+      this.health(line === 'points' ? 'points' : 'login', 'warn', msg, 'login');
+      this.log('Twitch: подписка отозвана (' + line + ') — нужен повторный вход');
+    });
     es.on('event', (type, ev) => this.onEvent(type, ev).catch((e) => this.log(type + ': ' + e.message)));
     es.start();
     return es;

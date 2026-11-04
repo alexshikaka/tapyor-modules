@@ -44,6 +44,13 @@ test('приём выключен — возврат', async () => {
   assert.equal(await p.handle(R('ария беспечный ангел')), 'refund-closed');
   assert.deepEqual(tw.back, ['r1']);
 });
+test('ошибка создания заказа — баллы возвращаются', async () => {
+  const { p, core, tw } = make();
+  core.orders.add = () => { throw new Error('очередь недоступна'); };
+  const r = await p.handle(R('ария беспечный ангел'));
+  assert.equal(r, 'refund-error');
+  assert.deepEqual(tw.back, ['r1']);
+});
 test('правила ядра — возврат с причиной', async () => {
   const { p, said } = make({}, { rules: () => ({ ok: false, reason: 'tooLong' }) });
   await p.handle(R('ария беспечный ангел'));
