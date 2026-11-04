@@ -10,6 +10,7 @@ const { Pipeline, DEFAULT_CFG } = require('./logic/pipeline');
 const { Points } = require('./logic/points');
 const { Tracker } = require('./logic/access');
 const replies = require('./logic/replies');
+const triggers = require('./logic/triggers');
 
 const DEFAULT_SETTINGS = {
   ...DEFAULT_CFG,
@@ -60,6 +61,10 @@ class Bot {
     this.helix = new Helix({ fetch: this.fetch, log: this.log });
     this.outbox = []; this.sending = false;
     this.rewardSync = null;
+    this.chatPending = 0;
+    this.chatRate = { at: 0, n: 0 };
+    this.userRate = new Map();
+    this.floodLogAt = 0;
     this.subs = [];
     this.channel = null; // { id, login }
     this.timers = [];
@@ -266,11 +271,49 @@ class Bot {
     }
   }
 
+  // Один заказ зрителя не чаще chatUserCooldownMs; общий поток команд ограничен
+  // chatMaxCommands за chatWindowMs. Это защита от «1000 человек написали !play».
+  isPrivileged(ev) {
+    const b = new Set((ev.badges || []).map((x) => x.set_id));
+    return b.has('broadcaster') || b.has('moderator') || ev.chatter_user_id === (this.channel && this.channel.id);
+  }
+
+  isChoiceText(text) {
+    const t = String(text || '').trim();
+    if (/^\d$/.test(t)) return true;
+    const p = triggers.parse(t, (this.pipeline && this.pipeline.cfg.triggers) || ['!play']);
+    return !!(p && /^\d$/.test(p.query));
+  }
+
+  noteFlood() {
+    const now = this.now();
+    if (now - this.floodLogAt < 10000) return;
+    this.floodLogAt = now;
+    this.journalAdd('sys', 'слишком много команд — часть пропускаю');
+  }
+
   // Сообщения обрабатываем последовательно: два заказа одного зрителя не должны
   // проскочить проверку лимита «активных» одновременно.
   onChat(ev) {
+    const text = (ev.message && ev.message.text) || '';
+    const cmd = triggers.parse(text, (this.pipeline && this.pipeline.cfg.triggers) || ['!play']);
+    const s = this.settings();
+    const now = this.now();
+    if (cmd && !this.isChoiceText(text)) {
+      if (now - this.chatRate.at >= s.chatWindowMs) { this.chatRate = { at: now, n: 0 }; }
+      this.chatRate.n++;
+      if (s.chatMaxCommands && this.chatRate.n > s.chatMaxCommands) { this.noteFlood(); return Promise.resolve('ignore'); }
+      if (!this.isPrivileged(ev)) {
+        const last = this.userRate.get(ev.chatter_user_id) || 0;
+        if (last && now - last < s.chatUserCooldownMs) { this.noteFlood(); return Promise.resolve('ignore'); }
+        this.userRate.set(ev.chatter_user_id, now);
+        if (this.userRate.size > 1000) this.userRate.delete(this.userRate.keys().next().value);
+      }
+    }
+    if (cmd && this.chatPending >= s.chatMaxQueue) { this.noteFlood(); return Promise.resolve('ignore'); }
+    this.chatPending++;
     const prev = this.chatChain || Promise.resolve();
-    this.chatChain = prev.catch(() => {}).then(() => this._onChat(ev));
+    this.chatChain = prev.catch(() => {}).then(() => this._onChat(ev)).finally(() => { this.chatPending--; });
     return this.chatChain;
   }
 
@@ -282,16 +325,23 @@ class Bot {
     }
     if (chat.user && ev.chatter_user_id === chat.user.id && chat.user.id !== this.channel.id) return; // сам бот
     const badges = new Set((ev.badges || []).map((b) => b.set_id));
+    const text = (ev.message && ev.message.text) || '';
     const user = {
       id: ev.chatter_user_id, login: ev.chatter_user_login,
       isBroadcaster: badges.has('broadcaster') || ev.chatter_user_id === this.channel.id,
       isMod: badges.has('moderator'), isVip: badges.has('vip'), isSub: badges.has('subscriber') || badges.has('founder'),
-      followedAt: await this.followedAt(ev.chatter_user_id)
+      followedAt: null
     };
+    // Дешёвый отказ: очередь уже полна — не тратим followedAt и поиск.
+    const cmd = triggers.parse(text, this.pipeline && this.pipeline.cfg.triggers);
+    if (cmd && !this.isChoiceText(text) && this.pipeline && this.pipeline.queueFullFor(user)) {
+      if (!this.isPrivileged(ev)) await this.pipeline.reply('queueFull', { ник: user.login }, ev.message_id);
+      return 'queueFull';
+    }
+    user.followedAt = await this.followedAt(ev.chatter_user_id);
     this.logins = this.logins || new Map(); this.logins.set(user.id, user.login);
     if (this.logins.size > 2000) this.logins.delete(this.logins.keys().next().value);
     const own = !ev.source_broadcaster_user_id || ev.source_broadcaster_user_id === this.channel.id;
-    const text = (ev.message && ev.message.text) || '';
     const out = await this.pipeline.handle({ id: ev.message_id, at: this.now(), text, user, own });
     if (out !== 'ignore') { this.journalAdd('cmd', user.login + ' · ' + text + ' → ' + outcomeText(out)); this.persist(); }
   }

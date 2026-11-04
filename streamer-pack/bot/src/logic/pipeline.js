@@ -19,6 +19,10 @@ const DEFAULT_CFG = {
   pauseFrom: 'played',      // played | ordered
   limitsFromQueue: 5,       // лимиты включаются, когда заказов «Твич» в очереди не меньше (0 — всегда)
   queueCap: 10,             // больше — «очередь полна»
+  chatMaxQueue: 100,        // сколько сообщений чата максимум ждёт разбора
+  chatMaxCommands: 60,      // глобальный лимит команд за окно
+  chatWindowMs: 10000,      // окно глобального лимита
+  chatUserCooldownMs: 3000, // один заказ зрителя не чаще
   choiceTtlSec: 60,         // сколько ждём ответ «1)/2)»
   maxChoices: 2,
   event: DEFAULT_EVENT,
@@ -60,6 +64,13 @@ class Pipeline {
   }
 
   twitchQueued() { return this.core.orders.count('twitch-cmd'); }
+
+  // Ранний отказ до followedAt и поиска: очередь уже полна, искать нечего.
+  queueFullFor(u) {
+    if (!u || u.isBroadcaster) return false;
+    const policy = policyFor(u, this.cfg.access, this.now());
+    return !policy.unlimited && this.cfg.queueCap && this.twitchQueued() >= this.cfg.queueCap;
+  }
 
   // Повторная проверка перед выбором «1)/2)»: пока зритель думал, приём могли закрыть,
   // стрим закончиться, а лимит — снова стать активным.

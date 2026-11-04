@@ -129,6 +129,30 @@ test('бот: команда в чате → поиск ядром → отве�
   assert.ok(!JSON.stringify(bot.journal).includes('AT'), 'токен не попал в журнал');
 });
 
+test('бот: массовые команды не растят очередь разбора', async () => {
+  const core = botCore();
+  const bot = new Bot(core, { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
+  bot.pipeline = { cfg: { triggers: ['!play'] } };
+  let calls = 0; bot._onChat = async () => { calls++; };
+  core._settings.set('bot', { chatMaxCommands: 1000, chatMaxQueue: 5, chatUserCooldownMs: 0 });
+  await Promise.all(Array.from({ length: 20 }, (_, i) => bot.onChat({
+    message_id: 'm' + i, chatter_user_id: 'u' + i, chatter_user_login: 'u' + i,
+    message: { text: '!play test' }, badges: []
+  })));
+  assert.equal(calls, 5);
+});
+
+test('бот: один зритель не чаще кулдауна', async () => {
+  const core = botCore();
+  const bot = new Bot(core, { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
+  bot.pipeline = { cfg: { triggers: ['!play'] } };
+  let calls = 0; bot._onChat = async () => { calls++; };
+  core._settings.set('bot', { chatMaxCommands: 1000, chatMaxQueue: 100, chatUserCooldownMs: 3000 });
+  const ev = { message_id: 'same', chatter_user_id: 'u1', chatter_user_login: 'u1', message: { text: '!play test' }, badges: [] };
+  await bot.onChat(ev); await bot.onChat(ev);
+  assert.equal(calls, 1);
+});
+
 test('бот: сохранение события обновляет планировщик', async () => {
   const bot = new Bot(botCore(), { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
   bot.pipeline = { cfg: {}, scheduler: { cfg: {}, planned: 0, plan() { this.planned++; } } };
