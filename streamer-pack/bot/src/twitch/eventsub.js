@@ -52,6 +52,10 @@ class EventSub extends EventEmitter {
   }
 
   async onMessage(ws, raw, isReconnect, prev) {
+    try { await this._onMessage(ws, raw, isReconnect, prev); }
+    catch (e) { this.log('Twitch: ошибка обработки сообщения — ' + (e && e.message || e)); }
+  }
+  async _onMessage(ws, raw, isReconnect, prev) {
     if (ws !== this.ws) return;
     this.clearTimer(this.welcomeTimer);
     let m; try { m = JSON.parse(typeof raw === 'string' ? raw : raw.toString()); } catch (_) { return; }
