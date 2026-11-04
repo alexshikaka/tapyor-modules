@@ -12,9 +12,11 @@
   function $(id) { return document.getElementById(id); }
   var ov = $('ov'), head = $('head'), cv = $('cov'), tline = $('tline'), labT = $('labT'), tval = $('tval'), meas = $('meas'),
     aline = $('aline'), sline = $('sline'), osc = $('osc'), prog = $('prog'), queue = $('queue'),
-    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue');
+    typo = $('typo'), tyCov = $('tyCov'), tyTitle = $('tyTitle'), tyArtist = $('tyArtist'), tyOsc = $('tyOsc'), tyQueue = $('tyQueue'),
+    dosCanvas = $('dosCanvas'), tyCanvas = $('tyCanvas');
 
-  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
+  var S = { cfg: null, np: null, next: [], lv: 0, lvAt: 0, spec: null, specAt: 0, wave: null, waveAt: 0,
+    lvlHist: [], specHist: [], smooth: 0.15, hist: [], tick: 0, title: null, artist: null,
     coverUrl: null, coverOk: false, status: null, prog: -1, queueSig: null, fitKey: null, dosHeights: null };
 
   var bars = [], cells = [], tyBars = [], TY_OSC = 46;
@@ -39,6 +41,9 @@
     ov.dataset.v = pl.v; ov.dataset.h = pl.h;
     ov.classList.toggle('style-typography', cfg.style === 'typography');
     if (typo) typo.hidden = cfg.style !== 'typography';
+    var advanced = cfg.osc && ['spectrumScroll', 'volume', 'oscilloscope'].indexOf(cfg.viz) >= 0;
+    ov.classList.toggle('viz-advanced', advanced);
+    if (S.vizPrev !== cfg.viz) { S.vizPrev = cfg.viz; S.lvlHist = []; S.specHist = []; }
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
     ov.style.setProperty('--v', cfg.vizColor || cfg.color);
@@ -156,6 +161,76 @@
     });
   }
 
+  // ----- продвинутые визуализаторы на canvas: водопад, громкость, осциллограмма -----
+  function canvasReady(c) {
+    if (!c) return null;
+    var r = c.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    var w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    var g = c.getContext('2d'); if (!g) return null;
+    g.setTransform(d, 0, 0, d, 0, 0);
+    return { g: g, w: r.width, h: r.height };
+  }
+  function fakeSpec(now, n) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(Math.max(0.04, 0.15 + 0.85 * Math.abs(Math.sin(now / 700 + i * 0.37) * Math.cos(now / 1100 + i * 0.11))));
+    return out;
+  }
+  function fakeWave(now, n) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(0.42 * Math.sin(i * 0.33 + now / 240) * Math.sin(i * 0.071 + now / 900));
+    return out;
+  }
+  function drawAdvanced(now, cfg) {
+    if (!cfg.osc || ['spectrumScroll', 'volume', 'oscilloscope'].indexOf(cfg.viz) < 0) return;
+    var c = cfg.style === 'typography' ? tyCanvas : dosCanvas;
+    var cv = canvasReady(c); if (!cv) return;
+    var g = cv.g, W = cv.w, H = cv.h, col = cfg.vizColor || cfg.color || '#fff';
+    g.clearRect(0, 0, W, H);
+    g.strokeStyle = col; g.fillStyle = col;
+    var typo = cfg.style === 'typography';
+    if (cfg.viz === 'spectrumScroll') {
+      var sp = (S.spec && now - S.specAt < 1500) ? S.spec : fakeSpec(now, 32);
+      S.specHist.push(sp); if (S.specHist.length > 90) S.specHist.shift();
+      var cols = S.specHist.length, cw = W / 90;
+      for (var x = 0; x < cols; x++) {
+        var arr = S.specHist[x];
+        for (var b = 0; b < arr.length; b++) {
+          var a = Math.max(0, Math.min(1, arr[b]));
+          g.globalAlpha = 0.08 + a * 0.85;
+          g.fillRect(x * cw, H - (b + 1) * H / arr.length, Math.max(1, cw - 1), H / arr.length + 0.5);
+        }
+      }
+      g.globalAlpha = 1;
+      return;
+    }
+    if (cfg.viz === 'volume') {
+      var level = (now - S.lvAt < 1500) ? S.lv : D.imitation(now / 900, 0.5);
+      S.lvlHist.push(Math.max(0, Math.min(1, level)));
+      if (S.lvlHist.length > 90) S.lvlHist.shift();
+      var n = S.lvlHist.length, sx = W / Math.max(1, n - 1);
+      g.beginPath();
+      for (var i = 0; i < n; i++) {
+        var xx = i * sx, yy = H - 3 - S.lvlHist[i] * (H - 8);
+        if (i === 0) g.moveTo(xx, yy); else g.lineTo(xx, yy);
+      }
+      g.globalAlpha = 0.16;
+      g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+      g.globalAlpha = 1; g.lineWidth = typo ? 2 : 3; g.stroke();
+      return;
+    }
+    // Настоящая осциллограмма: 128 отсчётов вокруг нулевой линии.
+    var wv = (S.wave && now - S.waveAt < 1200) ? S.wave : fakeWave(now, 128);
+    var mid = H / 2, step = W / Math.max(1, wv.length - 1);
+    g.beginPath();
+    for (var j = 0; j < wv.length; j++) {
+      var y = mid - Math.max(-1, Math.min(1, wv[j])) * (H / 2 - 3);
+      if (j === 0) g.moveTo(0, y); else g.lineTo(j * step, y);
+    }
+    g.lineWidth = typo ? 2 : 3; g.stroke();
+    g.globalAlpha = 0.25; g.beginPath(); g.moveTo(0, mid); g.lineTo(W, mid); g.stroke(); g.globalAlpha = 1;
+  }
+
   function current() { return DEMO ? demoNp() : S.np; }
 
   function render() {
@@ -219,6 +294,7 @@
         tyBars[ti].style.height = S.tyHeights[ti] + '%';
       }
     }
+    drawAdvanced(now, cfg);
   }
 
   // ----- связь с Тапёром -----
@@ -236,6 +312,12 @@
     try {
       var a = JSON.parse(e.data);
       if (Array.isArray(a) && a.length) { S.spec = a.slice(0, 32).map(function (v){ return Math.max(0, Math.min(1, Number(v) || 0)); }); S.specAt = Date.now(); }
+    } catch (x) { /* битый пакет — остаёмся на волне */ }
+  });
+  es.addEventListener('wave', function (e) {
+    try {
+      var a = JSON.parse(e.data);
+      if (Array.isArray(a) && a.length) { S.wave = a.slice(0, 256).map(function (v){ return Math.max(-1, Math.min(1, Number(v) || 0)); }); S.waveAt = Date.now(); }
     } catch (x) { /* битый пакет — остаёмся на волне */ }
   });
 
