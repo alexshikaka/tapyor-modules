@@ -75,7 +75,8 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ov.style-typography > .queue { display: none !important; }
 .ov:not(.style-typography) > #typo { display: none !important; }
 #typo[hidden] { display: none !important; }
-.typo { display: flex; flex-direction: column; gap: 6px; width: 100%; color: var(--c); }
+.typo { display: flex; flex-direction: column; gap: 6px; width: 100%; color: var(--c); font-family: 'Manrope', 'Onest', sans-serif; }
+.ty-title, .ty-artist, .ty-queue, .ty-queue b { font-family: 'Manrope', 'Onest', sans-serif; }
 .ty-head { display: flex; align-items: center; gap: 10px; width: calc(100% + 120px); }
 .ov[data-h="r"] .ty-head, .ov[data-h="r"] .ty-osc { margin-left: -120px; }
 .ov[data-h="l"] .ty-head, .ov[data-h="l"] .ty-osc { margin-right: -120px; }
