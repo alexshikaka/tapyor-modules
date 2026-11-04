@@ -21,6 +21,7 @@
   for (var i = 0; i < D.OSC; i++) { var b = document.createElement('i'); osc.appendChild(b); bars.push(b); S.hist.push(1); }
   for (var j = 0; j < D.CELLS; j++) { var c = document.createElement('i'); prog.appendChild(c); cells.push(c); }
   for (var t = 0; t < TY_OSC; t++) { var tb = document.createElement('i'); tyOsc.appendChild(tb); tyBars.push(tb); }
+  S.tyHeights = []; for (var th = 0; th < TY_OSC; th++) S.tyHeights.push(1);
 
   // ----- демо-трек (превью без живых данных) -----
   var DEMO_AT = Date.now();
@@ -99,6 +100,19 @@
     if (long) tval.style.setProperty('--mqs', Math.max(6, Math.round(meas.offsetWidth / 45)) + 's');
   }
 
+  function fitTypo() {
+    if (!tyTitle) return;
+    var t = S.title || '';
+    tyTitle.classList.remove('mq');
+    tyTitle.textContent = t;
+    var room = tyTitle.clientWidth;
+    if (room > 0 && tyTitle.scrollWidth > room + 1) {
+      tyTitle.textContent = t + '      ' + t + '      ';
+      tyTitle.classList.add('mq');
+      tyTitle.style.setProperty('--ty-mq', Math.max(7, Math.round(tyTitle.scrollWidth / 45)) + 's');
+    }
+  }
+
   function setText(np) {
     var L = D.labels(S.cfg.lang);
     var typo = S.cfg && S.cfg.style === 'typography';
@@ -109,7 +123,7 @@
       aline.textContent = typo ? (np.artist || '—') : (L.artist + (np.artist || '—'));
       if (tyTitle) tyTitle.textContent = np.title || '';
       if (tyArtist) tyArtist.textContent = np.artist || '—';
-      S.fitKey = null; fitTitle();
+      S.fitKey = null; fitTitle(); fitTypo();
     };
     if (changed && S.title !== null) {
       head.classList.add('swap');                         // плавная смена трека
@@ -177,7 +191,14 @@
       S.smooth += (lv - S.smooth) * D.smoothAlpha(cfg.smooth);
       S.hist.shift(); S.hist.push(D.barSteps(S.smooth));
       for (var k = 0; k < bars.length; k++) bars[k].style.height = (S.hist[k] * 12.5) + '%';
-      for (var ti = 0; ti < tyBars.length; ti++) tyBars[ti].style.height = (S.hist[Math.min(ti, S.hist.length - 1)] * 12.5) + '%';
+    }
+    // Типографика: 46 столбиков сглаживаются каждый кадр, а не прыгают раз в 180 мс.
+    if (cfg.osc && !paused) {
+      for (var ti = 0; ti < tyBars.length; ti++) {
+        var target = S.hist[Math.min(ti, S.hist.length - 1)] * 12.5;
+        S.tyHeights[ti] += (target - S.tyHeights[ti]) * 0.28;
+        tyBars[ti].style.height = S.tyHeights[ti] + '%';
+      }
     }
   }
 
@@ -196,6 +217,6 @@
   setInterval(function () { frame(false); }, TICK);
   if (DEMO) setInterval(render, 1000);
   // Шрифт догрузился — ширины поменялись: перемерить название
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { S.fitKey = null; fitTitle(); });
-  window.addEventListener('resize', function () { S.fitKey = null; fitTitle(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { S.fitKey = null; fitTitle(); fitTypo(); });
+  window.addEventListener('resize', function () { S.fitKey = null; fitTitle(); fitTypo(); });
 })();
