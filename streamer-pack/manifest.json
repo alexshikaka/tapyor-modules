@@ -1,8 +1,8 @@
 {
   "id": "streamer-pack",
   "name": "Пак стримера",
-  "version": "0.2.3",
-  "minCore": "0.31.4",
+  "version": "0.2.4",
+  "minCore": "0.31.5",
   "modules": [
     { "id": "bot", "name": "Чат-бот Twitch", "sinceEdition": 1, "main": "bot/src/index.js" },
     { "id": "overlay", "name": "Оверлей-плейлист", "sinceEdition": 1, "main": "overlay/src/index.js" }
