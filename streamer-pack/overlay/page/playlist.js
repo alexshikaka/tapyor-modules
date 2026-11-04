@@ -199,9 +199,11 @@
     if (cfg.osc && !paused) {
       var realTy = cfg.viz === 'real' && now - S.lvAt < 1500;
       var phase = now / 620;
+      var level = realTy ? Math.max(0.25, Math.min(1, S.lv)) : 1;
       for (var ti = 0; ti < tyBars.length; ti++) {
         var wave = 0.5 + 0.5 * Math.sin(phase * 2.1 + ti * 0.56) * Math.cos(phase * 0.73 + ti * 0.17);
-        var target = Math.max(8, Math.min(100, (realTy ? (0.22 + 0.78 * S.lv) : (0.22 + 0.78 * wave)) * 100));
+        // уровень звука — общая громкость, фаза — индивидуальная высота столбика
+        var target = Math.max(8, Math.min(100, (0.10 + 0.90 * wave * level) * 100));
         S.tyHeights[ti] += (target - S.tyHeights[ti]) * 0.24;
         tyBars[ti].style.height = S.tyHeights[ti] + '%';
       }
