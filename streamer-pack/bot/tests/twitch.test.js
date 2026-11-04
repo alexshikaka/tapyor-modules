@@ -129,6 +129,23 @@ test('бот: команда в чате → поиск ядром → отве�
   assert.ok(!JSON.stringify(bot.journal).includes('AT'), 'токен не попал в журнал');
 });
 
+test('бот: сохранение события обновляет планировщик', async () => {
+  const bot = new Bot(botCore(), { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
+  bot.pipeline = { cfg: {}, scheduler: { cfg: {}, planned: 0, plan() { this.planned++; } } };
+  await bot.saveSettings({ event: { when: 'manual', durationSec: 90 } });
+  assert.equal(bot.pipeline.scheduler.cfg.when, 'manual');
+  assert.equal(bot.pipeline.scheduler.cfg.durationSec, 90);
+  assert.equal(bot.pipeline.scheduler.planned, 1);
+});
+
+test('бот: две синхронизации награды не идут параллельно', async () => {
+  const bot = new Bot(botCore(), { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
+  let calls = 0;
+  bot._syncReward = async () => { calls++; await new Promise((r) => setTimeout(r, 5)); return 'rw1'; };
+  const [a, b] = await Promise.all([bot.syncReward(), bot.syncReward()]);
+  assert.equal(a, 'rw1'); assert.equal(b, 'rw1'); assert.equal(calls, 1);
+});
+
 test('бот: 403 на награду за баллы не рвёт чат', async () => {
   const core = botCore();
   core._settings.set('bot', { identity: 'self', pointsOn: true, access: { viewer: { access: 'always', active: 1, pauseMin: 0 }, follower: { access: 'always' }, sub: { access: 'always' }, vip: { access: 'always' }, mod: { access: 'always', unlimited: true } } });

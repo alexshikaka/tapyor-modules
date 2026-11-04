@@ -59,6 +59,7 @@ class Bot {
     this.fetch = deps.fetch || globalThis.fetch;
     this.helix = new Helix({ fetch: this.fetch, log: this.log });
     this.outbox = []; this.sending = false;
+    this.rewardSync = null;
     this.subs = [];
     this.channel = null; // { id, login }
     this.timers = [];
@@ -69,10 +70,17 @@ class Bot {
   async saveSettings(patch) {
     const s = { ...this.settings(), ...patch };
     this.core.settings.set('bot', s);
-    if (this.pipeline) Object.assign(this.pipeline.cfg, s);
+    if (this.pipeline) {
+      Object.assign(this.pipeline.cfg, s);
+      // Планировщик события держит свою копию настроек — обновляем и её.
+      if (this.pipeline.scheduler) {
+        Object.assign(this.pipeline.scheduler.cfg, s.event || {});
+        if ('event' in patch) this.pipeline.scheduler.plan(this.now());
+      }
+    }
     if (this.points) Object.assign(this.points.cfg, { accepting: s.accepting, pointsOn: s.pointsOn, replies: s.replies });
     if ('accepting' in patch || 'pointsOn' in patch || 'reward' in patch) await this.syncReward().catch((e) => this.log('награда: ' + e.message));
-    return s;
+    return this.settings(); // после syncReward мог появиться новый rewardId
   }
 
   // ---------- журнал ----------
@@ -341,7 +349,13 @@ class Bot {
   }
 
   // ---------- награда ----------
-  async syncReward() {
+  // Синхронизация сериализована: два быстрых сохранения не должны создать две награды.
+  syncReward() {
+    if (this.rewardSync) return this.rewardSync;
+    this.rewardSync = this._syncReward().finally(() => { this.rewardSync = null; });
+    return this.rewardSync;
+  }
+  async _syncReward() {
     const s = this.settings(), { broadcaster } = this.ids();
     if (!broadcaster.connected) return null;
     let rid = s.rewardId;
@@ -349,7 +363,8 @@ class Bot {
     const want = { ...s.reward, paused: !(s.accepting && s.pointsOn) };
     if (!rid) {
       rid = await this.helix.createReward(broadcaster, want);
-      this.core.settings.set('bot', { ...s, rewardId: rid });
+      const fresh = this.settings();
+      this.core.settings.set('bot', { ...fresh, rewardId: rid });
       this.log('награда «' + s.reward.title + '» создана');
     } else await this.helix.updateReward(broadcaster, rid, want);
     return rid;
