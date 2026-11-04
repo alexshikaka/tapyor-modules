@@ -193,10 +193,14 @@
       for (var k = 0; k < bars.length; k++) bars[k].style.height = (S.hist[k] * 12.5) + '%';
     }
     // Типографика: 46 столбиков сглаживаются каждый кадр, а не прыгают раз в 180 мс.
+    // Волна считается по фазе и отражается CSS-трансформом у верхнего края.
     if (cfg.osc && !paused) {
+      var realTy = cfg.viz === 'real' && now - S.lvAt < 1500;
+      var phase = now / 620;
       for (var ti = 0; ti < tyBars.length; ti++) {
-        var target = S.hist[Math.min(ti, S.hist.length - 1)] * 12.5;
-        S.tyHeights[ti] += (target - S.tyHeights[ti]) * 0.28;
+        var wave = 0.5 + 0.5 * Math.sin(phase * 2.1 + ti * 0.56) * Math.cos(phase * 0.73 + ti * 0.17);
+        var target = Math.max(8, Math.min(100, (realTy ? (0.22 + 0.78 * S.lv) : (0.22 + 0.78 * wave)) * 100));
+        S.tyHeights[ti] += (target - S.tyHeights[ti]) * 0.24;
         tyBars[ti].style.height = S.tyHeights[ti] + '%';
       }
     }
