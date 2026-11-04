@@ -104,9 +104,10 @@
   function fitTypo() {
     if (!tyTitle) return;
     var t = S.title || '';
+    var box = tyTitle.parentElement;
     tyTitle.classList.remove('mq');
     tyTitle.textContent = t;
-    var room = tyTitle.clientWidth;
+    var room = box ? box.clientWidth : tyTitle.clientWidth;
     if (room > 0 && tyTitle.scrollWidth > room + 1) {
       tyTitle.textContent = t + '      ' + t + '      ';
       tyTitle.classList.add('mq');

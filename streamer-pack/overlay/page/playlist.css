@@ -86,7 +86,8 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ty-cov canvas { display: block; width: 100%; height: 100%; image-rendering: auto; border-radius: 50%; }
 .ov.nocov .ty-cov { display: none; }
 .ty-txt { flex: 1 1 auto; min-width: 0; }
-.ty-title { display: inline-block; min-width: 100%; font-size: 34px; line-height: 1; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.ty-txt { overflow: hidden; min-width: 0; }
+.ty-title { display: inline-block; min-width: 0; font-size: 34px; line-height: 1; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .ty-title.mq { animation: tymq var(--ty-mq, 8s) linear infinite; }
 @keyframes tymq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .ty-artist { font-size: 19px; line-height: 1.15; font-weight: 700; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
