@@ -51,7 +51,13 @@
   }
 
   function rowText(item, i, nums) { return (nums ? (i + 1) + '. ' : '') + item.title + (item.artist ? ' - ' + item.artist : ''); }
-  function fadeAt(i) { return FADE[Math.min(i, FADE.length - 1)]; }
+  function fadeAt(i, on, pct) {
+    if (on === false || Number(pct) === 0) return 1;
+    var k = Number(pct);
+    if (!isFinite(k)) k = 100;
+    var base = FADE[Math.min(i, FADE.length - 1)];
+    return 1 - (1 - base) * Math.max(0, Math.min(100, k)) / 100;
+  }
 
   // Плавность осциллограммы: доля нового значения в сглаживании
   function smoothAlpha(s) { return s === 'fast' ? 0.85 : s === 'slow' ? 0.25 : 0.5; }

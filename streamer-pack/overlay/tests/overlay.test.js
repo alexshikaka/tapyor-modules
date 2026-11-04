@@ -118,6 +118,9 @@ test('позиция идёт сама, пока играет, и стоит н�
 test('затухание: 10 строк, не светлеет вниз, последняя читается', () => {
   for (let i = 1; i < 10; i++) assert.ok(D.fadeAt(i) <= D.fadeAt(i - 1));
   assert.ok(D.fadeAt(9) >= 0.4);
+  assert.equal(D.fadeAt(9, false, 100), 1);
+  assert.equal(normalize({ fadePct: 999 }).fadePct, 100);
+  assert.ok(D.fadeAt(9, true, 50) > D.fadeAt(9, true, 100));
 });
 test('угол экрана: поля безопасной зоны, сдвиг и размер', () => {
   const br = D.boxStyle({ pos: 'br', dx: 0, dy: 0, size: 100 });

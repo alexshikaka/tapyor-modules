@@ -15,6 +15,8 @@ const DEFAULTS = Object.freeze({
   color: '#FFB000',
   outline: true,      // чёрная пиксельная обводка
   count: 3,           // сколько песен «дальше», 0–10
+  fade: true,         // затухание строк списка
+  fadePct: 100,       // сила затухания, 0–100
   fill: true,         // добирать из волны / фонового плейлиста
   nums: true,
   cover: true,
@@ -28,7 +30,7 @@ const DEFAULTS = Object.freeze({
   smooth: 'mid'       // fast | mid | slow
 });
 
-const BOOL = ['outline', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq'];
+const BOOL = ['outline', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
 
 function clampNum(v, lo, hi, def) {
   const n = Number(v);
@@ -54,6 +56,7 @@ function normalize(raw) {
   out.size = clampNum(r.size, 80, 150, DEFAULTS.size);
   out.color = normColor(r.color, DEFAULTS.color);
   out.count = clampNum(r.count, 0, MAX_COUNT, DEFAULTS.count);
+  out.fadePct = clampNum(r.fadePct, 0, 100, DEFAULTS.fadePct);
   for (const k of BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];
   if (r.lang === 'ru' || r.lang === 'en') out.lang = r.lang;
   if (r.viz === 'real' || r.viz === 'fake') out.viz = r.viz;

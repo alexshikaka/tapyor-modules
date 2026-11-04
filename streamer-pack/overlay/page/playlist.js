@@ -117,7 +117,7 @@
     list.forEach(function (it, i) {
       var d = document.createElement('div');
       d.textContent = D.rowText(it, i, cfg.nums);
-      d.style.opacity = D.fadeAt(i);
+      d.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
       queue.appendChild(d);
     });
   }
