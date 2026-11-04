@@ -42,7 +42,11 @@
     if (typo) typo.hidden = cfg.style !== 'typography';
     var advanced = cfg.osc && cfg.viz === 'spectrumScroll';
     ov.classList.toggle('viz-advanced', advanced);
-    if (S.vizPrev !== cfg.viz) { S.vizPrev = cfg.viz; S.specHist = []; }
+    if (S.vizPrev !== cfg.viz) {
+      S.vizPrev = cfg.viz; S.specHist = [];
+      // водопад сразу заполняем историей, иначе первые 8 секунд видна только узкая полоска
+      if (advanced) for (var hi = 0; hi < 90; hi++) S.specHist.push(fakeSpec(Date.now() - (90 - hi) * 90));
+    }
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
     ov.style.setProperty('--v', cfg.vizColor || cfg.color);
