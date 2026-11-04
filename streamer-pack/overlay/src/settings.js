@@ -12,7 +12,8 @@ const DEFAULTS = Object.freeze({
   dx: 0,              // сдвиг от угла, px экрана 1920×1080
   dy: 0,
   size: 100,          // %, 80–150
-  color: '#FFB000',
+  color: '#FFB000',   // цвет текста
+  vizColor: '#FFB000', // цвет осциллограммы
   outline: true,      // чёрная пиксельная обводка
   count: 3,           // сколько песен «дальше», 0–10
   fade: true,         // затухание строк списка
@@ -55,6 +56,7 @@ function normalize(raw) {
   out.dy = clampNum(r.dy, -500, 500, DEFAULTS.dy);
   out.size = clampNum(r.size, 80, 150, DEFAULTS.size);
   out.color = normColor(r.color, DEFAULTS.color);
+  out.vizColor = normColor(r.vizColor, out.color);
   out.count = clampNum(r.count, 0, MAX_COUNT, DEFAULTS.count);
   out.fadePct = clampNum(r.fadePct, 0, 100, DEFAULTS.fadePct);
   for (const k of BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];

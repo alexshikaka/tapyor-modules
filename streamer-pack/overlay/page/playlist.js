@@ -41,6 +41,7 @@
     if (typo) typo.hidden = cfg.style !== 'typography';
     ov.style.setProperty('--c', cfg.color);
     ov.style.setProperty('--c0', cfg.color + '40');
+    ov.style.setProperty('--v', cfg.vizColor || cfg.color);
     for (var k in st) ov.style[k] = st[k];
     ov.classList.toggle('outline', !!cfg.outline);
     ov.classList.toggle('nocov', !cfg.cover);

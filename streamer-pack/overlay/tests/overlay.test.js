@@ -60,6 +60,11 @@ test('настройки: стиль «Типографика» допустим
   assert.equal(normalize({ style: 'typography' }).style, 'typography');
   assert.equal(normalize({ style: 'unknown' }).style, 'dos');
 });
+test('настройки: цвет текста и визуализатора независимы', () => {
+  assert.equal(normalize({ color: '#33ff66' }).vizColor, '#33FF66');
+  assert.equal(normalize({ color: '#33FF66', vizColor: '#0f8' }).vizColor, '#00FF88');
+  assert.equal(normalize({ color: '#33FF66', vizColor: 'bad' }).vizColor, '#33FF66');
+});
 test('настройки: до 10 песен, 0 — только играющий', () => {
   assert.equal(normalize({ count: 0 }).count, 0);
   assert.equal(normalize({ count: 10 }).count, 10);

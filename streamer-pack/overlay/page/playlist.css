@@ -3,7 +3,7 @@
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 
 .ov {
-  --c: #FFB000; --c0: #FFB00040;
+  --c: #FFB000; --c0: #FFB00040; --v: #FFB000;
   position: absolute; width: 340px; box-sizing: border-box;
   display: flex; flex-direction: column; gap: 6px;
   font-family: 'Pixelify Sans', 'Consolas', monospace; font-size: 22px; line-height: 1.12;
@@ -49,7 +49,7 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 
 /* Осциллограмма: столбики всегда растут снизу вверх, новое — справа */
 .osc { display: flex; gap: 2px; height: 22px; align-items: flex-end; }
-.osc i { flex: 1; display: block; height: 12.5%; background: var(--c); }
+.osc i { flex: 1; display: block; height: 12.5%; background: var(--v); }
 .ov.no-osc .osc { display: none; }
 
 /* Прогресс: всегда слева направо, в любом углу экрана */
@@ -92,9 +92,8 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .ty-artist { font-size: 19px; line-height: 1.15; font-weight: 700; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov[data-h="r"] .ty-txt { text-align: right; }
 .ov[data-h="c"] .ty-txt { text-align: center; }
-.ty-osc { display: flex; gap: 2px; height: 22px; align-items: flex-end; margin-top: 3px; width: calc(100% + 120px); }
-.ty-osc i { flex: 1; display: block; height: 12.5%; background: var(--c); border-radius: 1px; }
-.ov[data-v="t"] .ty-osc { align-items: flex-start; transform: scaleY(-1); }
+.ty-osc { display: flex; gap: 2px; height: 22px; align-items: flex-end; margin-top: 3px; width: calc(100% + 120px); transform: scaleY(-1); }
+.ty-osc i { flex: 1; display: block; height: 12.5%; background: var(--v); border-radius: 1px; }
 .ty-queue { display: flex; flex-direction: column; gap: 0; font-size: 19px; line-height: 1.35; font-weight: 600; }
 .ov[data-v="b"] .ty-queue { flex-direction: column-reverse; }
 .ty-queue div { white-space: nowrap; overflow: hidden; }
