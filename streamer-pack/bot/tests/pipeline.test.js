@@ -106,12 +106,11 @@ test('общий чат: чужие зрители по умолчанию не 
   assert.equal(await msg(user('a'), '!play кино группа крови', { own: false }), 'shared');
 });
 
-test('лимиты включаются только при длинной очереди', async () => {
+test('один активный заказ всегда, даже при короткой очереди', async () => {
   const { msg } = make({ limitsFromQueue: 2 });
   const a = user('a');
   assert.equal(await msg(a, '!play кино группа крови'), 'queued');
-  assert.equal(await msg(a, '!play земфира искала'), 'queued');  // в очереди 1 < 2 — лимитов нет
-  assert.equal(await msg(a, '!play сплин море'), 'active');      // 2 — лимиты включились
+  assert.equal(await msg(a, '!play земфира искала'), 'active');
 });
 
 test('потолок очереди', async () => {
@@ -185,10 +184,12 @@ test('в событии по названию ищем только по офи�
 });
 
 test('не выигрывать два события подряд', async () => {
-  const { p, c, msg } = make({ access: preset('event'), event: { when: 'manual', winners: 1 } });
-  await p.openEvent(); await msg(user('a'), '!play кино группа крови'); c.add(61000); await p.tick();
+  const { p, c, core, msg } = make({ access: preset('event'), event: { when: 'manual', winners: 1 } });
+  const a = user('a');
+  await p.openEvent(); await msg(a, '!play кино группа крови'); c.add(61000); await p.tick();
+  p.tracker.onPlayed(a.id, core.added[0].id, p.now());
   await p.openEvent();
-  assert.equal(await msg(user('a'), '!play земфира искала'), 'repeatWin');
+  assert.equal(await msg(a, '!play земфира искала'), 'repeatWin');
 });
 
 test('кто первый: закрывается досрочно, когда набралось', async () => {

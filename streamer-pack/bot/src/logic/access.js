@@ -5,10 +5,10 @@
 const DAY = 86400000, MIN = 60000;
 
 const DEFAULT_ACCESS = {
-  viewer:   { access: 'event',  active: 1, pauseMin: 30, perStream: 0 },
-  follower: { access: 'event',  active: 1, pauseMin: 30, perStream: 0, minDays: 7 },
-  sub:      { access: 'event',  active: 1, pauseMin: 30, perStream: 0 },
-  vip:      { access: 'always', active: 2, pauseMin: 15, perStream: 0 },
+  viewer:   { access: 'event',  pauseMin: 30, perStream: 0 },
+  follower: { access: 'event',  pauseMin: 30, perStream: 0, minDays: 7 },
+  sub:      { access: 'event',  pauseMin: 30, perStream: 0 },
+  vip:      { access: 'always', pauseMin: 15, perStream: 0 },
   mod:      { access: 'always', unlimited: true }
 };
 const ACCESS_RANK = { none: 0, event: 1, always: 2 };
@@ -35,19 +35,17 @@ function categoriesOf(user, table, now) {
 function policyFor(user, table = DEFAULT_ACCESS, now = Date.now()) {
   if (user.isBroadcaster) return { access: 'always', unlimited: true, cats: ['broadcaster'] };
   const cats = categoriesOf(user, table, now);
-  const p = { access: 'none', unlimited: false, active: 0, pauseMin: Infinity, perStream: -1, cats };
+  const p = { access: 'none', unlimited: false, pauseMin: Infinity, perStream: -1, cats };
   for (const c of cats) {
     const t = table[c]; if (!t) continue;
     if ((ACCESS_RANK[t.access] || 0) > ACCESS_RANK[p.access]) p.access = t.access;
     if (t.unlimited) p.unlimited = true;
-    p.active = Math.max(p.active, t.active || 0);
     p.pauseMin = Math.min(p.pauseMin, t.pauseMin != null ? t.pauseMin : Infinity);
     const ps = t.perStream || 0; // 0 — без ограничения
     p.perStream = p.perStream === -1 ? ps : (p.perStream === 0 || ps === 0 ? 0 : Math.max(p.perStream, ps));
   }
   if (!isFinite(p.pauseMin)) p.pauseMin = 0;
   if (p.perStream < 0) p.perStream = 0;
-  if (p.active < 1) p.active = 1;
   return p;
 }
 
@@ -70,16 +68,18 @@ class Tracker {
   timeoutLeftMin(id, now) { const x = this.users.get(id); return x && x.timeoutUntil > now ? Math.ceil((x.timeoutUntil - now) / MIN) : 0; }
   timeouts(now) { return [...this.users].filter(([, x]) => x.timeoutUntil > now).map(([id, x]) => ({ id, leftMin: Math.ceil((x.timeoutUntil - now) / MIN) })); }
 
-  // Можно ли этому зрителю заказать сейчас. Блок и ⛔ действуют всегда; остальные лимиты — если limitsOn.
+  // Блок и ⛔ действуют всегда; один активный заказ — тоже всегда.
+  // Пауза и лимит за стрим — только если limitsOn.
   // opts: { pauseFrom: 'played'|'ordered', limitsOn: boolean }
   check(user, policy, now, opts = {}) {
     if (this.isBlocked(user.id)) return { ok: false, why: 'blocked' };
     const left = this.timeoutLeftMin(user.id, now);
     if (left) return { ok: false, why: 'timeout', min: left };
-    if (policy.unlimited || opts.limitsOn === false) return { ok: true };
+    if (policy.unlimited) return { ok: true };
     const x = this.users.get(user.id);
     if (!x) return { ok: true };
-    if (x.active.length >= policy.active) return { ok: false, why: 'active' };
+    if (x.active.length >= 1) return { ok: false, why: 'active' };
+    if (opts.limitsOn === false) return { ok: true };
     if (policy.perStream && x.streamCount >= policy.perStream) return { ok: false, why: 'perStream' };
     const from = opts.pauseFrom === 'ordered' ? x.lastOrderAt : x.lastPlayedAt;
     if (policy.pauseMin && from) {

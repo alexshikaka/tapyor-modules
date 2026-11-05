@@ -8,7 +8,7 @@ const NOW = 1_700_000_000_000, DAY = 86400000, MIN = 60000;
 
 test('несколько ролей — самая щедрая', () => {
   const p = policyFor(user('a', { isSub: true, isVip: true }), DEFAULT_ACCESS, NOW);
-  assert.equal(p.access, 'always'); assert.equal(p.active, 2); assert.equal(p.pauseMin, 15);
+  assert.equal(p.access, 'always'); assert.equal(p.pauseMin, 15);
 });
 test('фолловер считается только после N дней', () => {
   const tbl = preset('event'); tbl.follower.access = 'always';
@@ -31,7 +31,9 @@ test('пауза считается после того, как трек сыг�
 test('лимиты выключены при короткой очереди, но блок и ⛔ действуют', () => {
   const tr = new Tracker(); const u = user('a'); const p = policyFor(u, DEFAULT_ACCESS, NOW);
   tr.onQueued(u.id, 'o1', NOW);
-  assert.equal(tr.check(u, p, NOW, { limitsOn: false }).ok, true);
+  assert.equal(tr.check(u, p, NOW, { limitsOn: false }).why, 'active');
+  tr.onPlayed(u.id, 'o1', NOW);
+  assert.equal(tr.check(u, p, NOW + MIN, { limitsOn: false }).ok, true);
   tr.timeout(u.id, 10, NOW);
   assert.equal(tr.check(u, p, NOW + 2 * MIN, { limitsOn: false }).min, 8);
   tr.block(u.id, 'a');
