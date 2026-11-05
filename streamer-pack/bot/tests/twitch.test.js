@@ -301,3 +301,14 @@ test('бот: !skip только модератор/стример', async () =>
   chat('s2', [{ set_id: 'moderator' }]); await new Promise((r) => setTimeout(r, 10));
   assert.equal(skips, 1);
 });
+
+
+test('бот: своё сообщение в чате не становится командой', async () => {
+  const bot = new Bot(botCore(), { fetch: async () => ({ ok: true, json: async () => ({}) }), setInterval: () => 0, clearInterval: () => {} });
+  let calls = 0;
+  bot.channel = { id: '100', login: 'alexshikaka' };
+  bot.pipeline = { cfg: { triggers: ['!play'] }, queueFullFor: () => false, handle: async () => { calls++; } };
+  bot.sentIds.add('self-msg');
+  await bot._onChat({ message_id: 'self-msg', chatter_user_id: '100', chatter_user_login: 'alexshikaka', badges: [{ set_id: 'broadcaster' }], message: { text: '@alexshikaka уточни: исполнитель — название' } });
+  assert.equal(calls, 0);
+});
