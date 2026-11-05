@@ -83,6 +83,18 @@ test('fuzz: Pipeline не пускает в очередь больше queueCap
   assert.ok(core.added.every((o) => o.prov === 'twitch-cmd'));
 });
 
+test('fuzz: exact без track не превращается в заказ', async () => {
+  const c = clock();
+  const core = fakeCore({});
+  core.findOrder = async () => ({ level: 'exact', track: null });
+  const p = new Pipeline({ access: preset('always'), triggers: ['!play'], queueCap: 5, limitsFromQueue: 0 },
+    { core, now: c.now, rnd: seeded(1), say: async () => {} });
+  p.setOnline(true);
+  const out = await p.handle({ id: 'm1', at: c.now(), text: '!play кино', own: true, user: user('u') });
+  assert.equal(out, 'notFound');
+  assert.equal(core.added.length, 0);
+});
+
 test('fuzz: случайные команды не роняют Pipeline', async () => {
   const rnd = prng(99);
   const c = clock();

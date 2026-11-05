@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 // Путь заказа командой: сообщение чата → дешёвые проверки → поиск → правила → решение по режиму.
 // Ни Twitch, ни Electron здесь нет: всё внешнее приходит через core (мост ядра) и say (ответ в чат).
 
@@ -170,6 +170,8 @@ class Pipeline {
       return 'clarify';
     }
     if (found.level === 'exact') {
+      // Битый ответ источника не должен превращаться в заказ с track=null.
+      if (!found.track) { r('notFound'); return 'notFound'; }
       const rule = this.core.checkTrack(found.track);
       if (!rule.ok) { r('rules', { причина: replies.REASONS[rule.reason] || rule.reason }); return 'rules'; }
       return this.enqueue(u, found.track, msg.id, msg.text);
