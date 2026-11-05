@@ -61,6 +61,7 @@ class Bot {
     this.fetch = deps.fetch || globalThis.fetch;
     this.helix = new Helix({ fetch: this.fetch, log: this.log });
     this.outbox = []; this.sending = false;
+    this.sentIds = new Set();
     this.rewardSync = null;
     this.chatPending = 0;
     this.chatRate = { at: 0, n: 0 };
@@ -324,7 +325,10 @@ class Bot {
       const sim = parseSim(ev.message && ev.message.text);
       if (sim) return this.onSim(sim, ev);
     }
-    if (chat.user && ev.chatter_user_id === chat.user.id && chat.user.id !== this.channel.id) return; // сам бот
+    // Свой ответ в чате (identity:self пишет от имени стримера) не должен
+    // обрабатываться как новая команда — иначе clarify отвечает сам себе.
+    if (ev.message_id && this.sentIds && this.sentIds.has(ev.message_id)) return;
+    if (chat.user && ev.chatter_user_id === chat.user.id && chat.user.id !== this.channel.id) return; // отдельный бот
     const badges = new Set((ev.badges || []).map((b) => b.set_id));
     const text = (ev.message && ev.message.text) || '';
     const user = {
@@ -412,7 +416,11 @@ class Bot {
     try {
       while (this.outbox.length) {
         const m = this.outbox.shift();
-        try { await this.helix.send(this.ids().chat, this.channel.id, m.text, m.replyTo); this.journalAdd('say', m.text); }
+        try {
+          const sentId = await this.helix.send(this.ids().chat, this.channel.id, m.text, m.replyTo);
+          if (sentId && typeof sentId === 'string') { this.sentIds.add(sentId); if (this.sentIds.size > 200) this.sentIds.delete(this.sentIds.values().next().value); }
+          this.journalAdd('say', m.text);
+        }
         catch (e) { this.log('не отправил в чат: ' + e.message); }
         if (this.outbox.length) await wait(this.settings().sendIntervalMs);
       }

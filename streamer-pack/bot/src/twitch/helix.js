@@ -46,7 +46,7 @@ class Helix {
     const d = await this.call(identity, 'POST', '/chat/messages', { body });
     const x = d && d.data && d.data[0];
     if (x && !x.is_sent) throw new TwitchError('Twitch не пропустил сообщение: ' + ((x.drop_reason && x.drop_reason.message) || 'без причины'), 200, x);
-    return true;
+    return (x && x.message_id) || true;
   }
 
   // Когда зритель зафоловил канал; null — не фолловер.
