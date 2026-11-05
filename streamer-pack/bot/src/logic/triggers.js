@@ -6,7 +6,7 @@
 const DEFAULT_TRIGGERS = ['!play'];
 
 // Служебные команды бота — триггер заказа не может совпадать с ними.
-const RESERVED = ['!отмена', '!песня', '!место', '!событие', '!srpause', '!srон'];
+const RESERVED = ['!отмена', '!песня', '!место', '!событие', '!srpause', '!srон', '!cancel', '!skip'];
 
 function norm(s) { return String(s || '').trim().toLowerCase().replace(/ё/g, 'е'); }
 

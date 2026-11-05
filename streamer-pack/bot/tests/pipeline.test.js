@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { Pipeline } = require('../src/logic/pipeline');
@@ -207,4 +207,13 @@ test('VIP заказывает и во время события обычным 
   await p.openEvent();
   assert.equal(await msg(user('olga', { isVip: true }), '!play кино группа крови'), 'queued');
   assert.equal(core.added.length, 1);
+});
+
+test('cancelByUser убирает только заказ этого зрителя', async () => {
+  const { p, core, msg } = make();
+  await msg(user('a'), '!play кино группа крови');
+  const id = core.added[0].id;
+  assert.equal(p.cancelByUser('u-b'), null);
+  assert.equal(p.cancelByUser('u-a'), id);
+  assert.equal(core.added.length, 0);
 });

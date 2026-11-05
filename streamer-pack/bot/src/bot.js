@@ -29,6 +29,7 @@ const OUTCOME = {
   queued: 'поставил в очередь', choose: 'переспросил: варианты', notFound: 'не нашёл — подсказал', rules: 'не прошёл правила',
   closed: 'приём закрыт', offline: 'стрим не идёт', blocked: 'заблокирован — молча', timeout: 'тайм-аут ⛔', active: 'уже ждёт заказ',
   pause: 'пауза', perStream: 'лимит за стрим', noAccess: 'нет доступа', outsideEvent: 'вне события', empty: 'пустой заказ',
+  cancelled: 'отменил заказ', nothingToCancel: 'нечего отменять', skipped: 'пропустил трек', skipDenied: 'нет прав на скип',
   queueFull: 'очередь полна', repeatWin: 'выиграл прошлое событие', shared: 'общий чат — чужой зритель',
   'event-ok': 'событие: заявка принята', 'event-fail': 'событие: не нашёл — подсказал', 'event-already': 'событие: заявка уже есть',
   'event-pending': 'событие: заявка ищется', 'event-closed': 'событие: уже закрыто',
@@ -332,6 +333,26 @@ class Bot {
       isMod: badges.has('moderator'), isVip: badges.has('vip'), isSub: badges.has('subscriber') || badges.has('founder'),
       followedAt: null
     };
+    // Свои команды: !cancel — только свой заказ; !skip — только мод/стример.
+    const command = String(text || '').trim().toLowerCase();
+    if (command === '!cancel') {
+      const id = this.pipeline.cancelByUser(user.id);
+      await this.pipeline.reply(id ? 'cancelled' : 'nothingToCancel', { ник: user.login }, ev.message_id);
+      this.journalAdd('cmd', user.login + ' · ' + text + ' → ' + (id ? 'отменил заказ' : 'нечего отменять'));
+      this.persist();
+      return id ? 'cancelled' : 'nothingToCancel';
+    }
+    if (command === '!skip') {
+      if (!this.isPrivileged(ev)) return 'skipDenied';
+      try {
+        if (this.core.player && this.core.player.skip) this.core.player.skip();
+        else if (this.core.skip) this.core.skip();
+      } catch (e) { this.log('skip: ' + e.message); return 'skipDenied'; }
+      await this.pipeline.reply('skipped', {}, ev.message_id);
+      this.journalAdd('cmd', user.login + ' · ' + text + ' → пропустил текущий трек');
+      this.persist();
+      return 'skipped';
+    }
     // Дешёвый отказ: очередь уже полна — не тратим followedAt и поиск.
     const cmd = triggers.parse(text, this.pipeline && this.pipeline.cfg.triggers);
     if (cmd && !this.isChoiceText(text) && this.pipeline && this.pipeline.queueFullFor(user)) {

@@ -279,6 +279,17 @@ class Pipeline {
     return res;
   }
 
+  // Отмена своего заказа: только последний активный заказ этого зрителя.
+  cancelByUser(userId) {
+    const mine = [...this.orders].filter(([, uid]) => uid === userId);
+    if (!mine.length) return null;
+    const [id] = mine[mine.length - 1];
+    try { if (this.core.orders && this.core.orders.remove) this.core.orders.remove(id); } catch (e) {}
+    this.tracker.onDropped(id);
+    this.orders.delete(id);
+    return id;
+  }
+
   // ---------- события очереди от ядра ----------
   orderPlayed(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onPlayed(id, orderId, this.now()); this.orders.delete(orderId); } }
   orderDropped(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onDropped(id, orderId); this.orders.delete(orderId); } }
