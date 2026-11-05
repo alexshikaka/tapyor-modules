@@ -269,3 +269,35 @@ test('бот: заказ убран из очереди — в журнале «
   assert.match(line.text, /vasya/);
   assert.match(line.text, /стример убрал/);
 });
+
+
+test('бот: !cancel отменяет только свой заказ', async () => {
+  const s = botSetup();
+  await s.bot.start(); await new Promise((r) => setImmediate(r));
+  const chat = (mid, uid, login, text, badges = []) => s.es.emit('event', 'channel.chat.message', {
+    message_id: mid, chatter_user_id: uid, chatter_user_login: login, badges, message: { text }
+  });
+  chat('c1', 'u-vasya', 'vasya', '!play кино группа крови');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.core.added.length, 1);
+  chat('c2', 'u-petya', 'petya', '!cancel'); // чужой — не трогает
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.core.added.length, 1);
+  chat('c3', 'u-vasya', 'vasya', '!cancel');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.core.added.length, 0);
+});
+
+test('бот: !skip только модератор/стример', async () => {
+  const s = botSetup();
+  let skips = 0;
+  s.core.player = { skip() { skips++; } };
+  await s.bot.start(); await new Promise((r) => setImmediate(r));
+  const chat = (id, badges) => s.es.emit('event', 'channel.chat.message', {
+    message_id: id, chatter_user_id: id, chatter_user_login: 'u' + id, badges, message: { text: '!skip' }
+  });
+  chat('s1', []); await new Promise((r) => setTimeout(r, 10));
+  assert.equal(skips, 0);
+  chat('s2', [{ set_id: 'moderator' }]); await new Promise((r) => setTimeout(r, 10));
+  assert.equal(skips, 1);
+});
