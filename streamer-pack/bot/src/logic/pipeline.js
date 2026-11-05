@@ -30,6 +30,19 @@ const DEFAULT_CFG = {
 };
 
 function trackLabel(t) { return t ? (t.author ? t.author + ' — ' : '') + (t.title || '') : ''; }
+// Одно слово: принимаем, только если в нём читаются и исполнитель, и название.
+// «кино_мама_анархия» и «пикникегиптянин» — да; «Human» и «Upast» — нет.
+function compactWord(s) {
+  return String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+function bothInOneWord(query, track) {
+  if (!track || !track.author || !track.title) return false;
+  const q = compactWord(query), a = compactWord(track.author), t = compactWord(track.title);
+  if (!q || !a || !t) return false;
+  // Нужны обе части: запрос начинается с исполнителя и заканчивается названием.
+  return q.length >= a.length + t.length && q.startsWith(a) && q.endsWith(t);
+}
+
 
 class Pipeline {
   // deps: { core, say(text, { replyTo }), now(), rnd(), log(text), limiter }
@@ -164,6 +177,14 @@ class Pipeline {
     if (!policy.unlimited && this.cfg.queueCap && this.twitchQueued() >= this.cfg.queueCap) { r('queueFull'); return 'queueFull'; }
     const found = await this.search(p.query, false);
     const oneWord = String(p.query || '').trim().split(/\s+/).filter(Boolean).length === 1;
+    const allFound = [found.track, ...(found.alts || [])].filter(Boolean);
+    const combined = oneWord ? allFound.filter((t) => bothInOneWord(p.query, t)) : [];
+    if (oneWord && !combined.length) {
+      // Одно слово без «исполнитель + название» не угадываем — просим пояснить.
+      this.clarify.set(u.id, { expires: this.now() + 60000, msgId: msg.id });
+      r('clarify', { ник: u.login });
+      return 'clarify';
+    }
     if (oneWord && found.level !== 'none' && (found.level !== 'exact' || (found.alts && found.alts.length))) {
       this.clarify.set(u.id, { expires: this.now() + 60000, msgId: msg.id });
       r('clarify', { ник: u.login });
@@ -178,6 +199,7 @@ class Pipeline {
     }
     if (found.level === 'doubt' && !silent) {
       const opts = [found.track, ...(found.alts || [])].filter(Boolean)
+        .filter((t) => !oneWord || combined.includes(t))
         .filter((t) => this.core.checkTrack(t).ok).slice(0, this.cfg.maxChoices);
       if (opts.length === 1) return this.enqueue(u, opts[0], msg.id, msg.text);
       if (opts.length > 1) {

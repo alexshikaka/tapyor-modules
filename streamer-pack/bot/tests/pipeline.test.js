@@ -14,6 +14,8 @@ const CAT = {
   'сплин море': { level: 'exact', track: track('Сплин', 'Море') },
   'ария беспечный ангел': { level: 'exact', track: track('Ария', 'Беспечный ангел') },
   'upast': { level: 'exact', track: track('UPAST', 'UPAST') },
+  'кино_мама_анархия': { level: 'exact', track: track('Кино', 'Мама-анархия') },
+  'пикникегиптянин': { level: 'exact', track: track('Пикник', 'Египтянин') },
   'human': { level: 'doubt', track: track('Human', 'Human'), alts: [track('Human', 'Human (remix)')] },
   'human — song': { level: 'exact', track: track('Human', 'Song') }
 };
@@ -81,10 +83,13 @@ test('ручное одобрение без очереди занимает act
   assert.equal(await msg(user('a'), '!play сплин море'), 'active');
   assert.equal(await msg(user('b'), '!play сплин море'), 'queueFull');
 });
-test('одно слово с единственным точным совпадением можно', async () => {
+test('одно слово: исполнитель+название можно, иначе просим пояснить', async () => {
   const { core, msg } = make();
-  assert.equal(await msg(user('a'), '!play upast'), 'queued');
-  assert.equal(core.added.length, 1);
+  assert.equal(await msg(user('a'), '!play кино_мама_анархия'), 'queued');
+  assert.equal(await msg(user('b'), '!play пикникегиптянин'), 'queued');
+  assert.equal(await msg(user('c'), '!play upast'), 'clarify');
+  assert.equal(await msg(user('d'), '!play human'), 'clarify');
+  assert.equal(core.added.length, 2);
 });
 
 test('правила ядра: причина человеческим языком', async () => {
