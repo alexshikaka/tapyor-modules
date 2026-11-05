@@ -79,8 +79,9 @@ class Tracker {
     const x = this.users.get(user.id);
     if (!x) return { ok: true };
     if (x.active.length >= 1) return { ok: false, why: 'active' };
-    if (opts.limitsOn === false) return { ok: true };
+    // Лимит за стрим не зависит от очереди и паузы — действует всегда.
     if (policy.perStream && x.streamCount >= policy.perStream) return { ok: false, why: 'perStream' };
+    if (opts.limitsOn === false) return { ok: true };
     const from = opts.pauseFrom === 'ordered' ? x.lastOrderAt : x.lastPlayedAt;
     if (policy.pauseMin && from) {
       const until = from + policy.pauseMin * MIN;

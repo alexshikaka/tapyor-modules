@@ -54,3 +54,12 @@ test('⛔ и блоки переживают перезапуск', () => {
   assert.equal(again.timeoutLeftMin('u-a', NOW + MIN), 9);
   assert.equal(again.isBlocked('u-b'), true);
 });
+
+test('лимит за стрим действует даже при короткой очереди', () => {
+  const tbl = preset('event');
+  tbl.viewer.perStream = 1; tbl.viewer.pauseMin = 0;
+  const tr = new Tracker(); const u = user('a'); const p = policyFor(u, tbl, NOW);
+  tr.onQueued(u.id, 'o1', NOW);
+  tr.onPlayed(u.id, 'o1', NOW + MIN);
+  assert.equal(tr.check(u, p, NOW + 2 * MIN, { limitsOn: false }).why, 'perStream');
+});
