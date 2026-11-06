@@ -176,7 +176,9 @@ class Pipeline {
     const r = (key, vars) => (silent ? null : this.reply(key, { ник: u.login, ...vars }, msg.id));
     if (!policy.unlimited && this.cfg.queueCap && this.twitchQueued() >= this.cfg.queueCap) { r('queueFull'); return 'queueFull'; }
     const found = await this.search(p.query, false);
-    const oneWord = String(p.query || '').trim().split(/\s+/).filter(Boolean).length === 1;
+    // Ссылка — не «одно слово»: она идёт в прямой resolve, а не в уточнение.
+    const isLink = !!(p.links && p.links.length) || /^https?:\/\//i.test(String(p.query || '').trim());
+    const oneWord = !isLink && String(p.query || '').trim().split(/\s+/).filter(Boolean).length === 1;
     const allFound = [found.track, ...(found.alts || [])].filter(Boolean);
     const combined = oneWord ? allFound.filter((t) => bothInOneWord(p.query, t)) : [];
     if (oneWord && !combined.length) {

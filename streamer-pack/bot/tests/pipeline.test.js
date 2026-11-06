@@ -223,3 +223,8 @@ test('cancelByUser убирает только заказ этого зрите�
   assert.equal(p.cancelByUser('u-a'), id);
   assert.equal(core.added.length, 0);
 });
+test('ссылка YouTube не попадает в правило одного слова', async () => {
+  const { core, msg } = make();
+  core.findOrder = async () => ({ level: 'exact', track: track('YouTube', 'Link Song') });
+  assert.equal(await msg(user('a'), '!play https://youtu.be/abc123'), 'queued');
+});
