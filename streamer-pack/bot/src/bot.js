@@ -150,7 +150,7 @@ class Bot {
     });
     // ⛔: у своего заказа (стримера) трек убирается, но тайм-аут не ставится.
     this.core.on('order:ban', (id, min) => {
-      const uid = this.pipeline.orders.get(id);
+      const uid = this.pipeline.userForOrder ? this.pipeline.userForOrder(id) : this.pipeline.orders.get(id);
       const user = { isBroadcaster: !!(this.channel && uid === this.channel.id) };
       if (this.pipeline.orderBan(id, min, user)) { this.journalAdd('ban', '⛔ тайм-аут ' + min + ' мин'); this.persist(); }
     });

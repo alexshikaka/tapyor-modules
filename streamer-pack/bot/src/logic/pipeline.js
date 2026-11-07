@@ -62,6 +62,7 @@ class Pipeline {
     this.lastSeq = -1;       // номер последнего закрытого события (для «не выигрывать два подряд»)
     this.choices = new Map(); // userId → { options, expires, user, msgId, text }
     this.orders = new Map();  // orderId → userId
+    this.playedOrders = new Map(); // последние сыгравшие orderId → userId (для ⛔ текущего трека)
     this.clarify = new Map(); // userId → { expires, msgId } — ждём уточнение однословного заказа
   }
 
@@ -315,14 +316,22 @@ class Pipeline {
   }
 
   // ---------- события очереди от ядра ----------
-  orderPlayed(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onPlayed(id, orderId, this.now()); this.orders.delete(orderId); } }
-  orderDropped(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onDropped(id, orderId); this.orders.delete(orderId); } }
+  orderPlayed(orderId) {
+    const id = this.orders.get(orderId);
+    if (id == null) return;
+    this.tracker.onPlayed(id, orderId, this.now());
+    this.orders.delete(orderId);
+    this.playedOrders.set(orderId, id);
+    while (this.playedOrders.size > 30) this.playedOrders.delete(this.playedOrders.keys().next().value);
+  }
+  orderDropped(orderId) { const id = this.orders.get(orderId); if (id != null) { this.tracker.onDropped(id, orderId); this.orders.delete(orderId); } this.playedOrders.delete(orderId); }
   // ⛔ у заказа «Твич»: трек уже убран ядром, зритель — в тайм-аут. На стримера не действует:
   // его заказ просто уходит из учёта, без тайм-аута (иначе стример закрывал бы заказы сам себе).
+  userForOrder(orderId) { return this.orders.get(orderId) ?? this.playedOrders.get(orderId) ?? null; }
   orderBan(orderId, minutes, user) {
-    const id = this.orders.get(orderId);
+    const id = this.userForOrder(orderId);
     if (id == null) return false;
-    this.tracker.onDropped(id, orderId); this.orders.delete(orderId);
+    this.tracker.onDropped(id, orderId); this.orders.delete(orderId); this.playedOrders.delete(orderId);
     if (user && user.isBroadcaster) return false;
     this.tracker.timeout(id, minutes, this.now());
     return true;

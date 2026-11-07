@@ -228,3 +228,14 @@ test('ссылка YouTube не попадает в правило одного 
   core.findOrder = async () => ({ level: 'exact', track: track('YouTube', 'Link Song') });
   assert.equal(await msg(user('a'), '!play https://youtu.be/abc123'), 'queued');
 });
+
+test('ban текущего трека: привязка остаётся после orderPlayed', async () => {
+  const { p, core, msg } = make();
+  const a = user('a');
+  await msg(a, '!play кино группа крови');
+  const id = core.added[0].id;
+  p.orderPlayed(id);
+  assert.equal(p.userForOrder(id), a.id);
+  assert.equal(p.orderBan(id, 10, { isBroadcaster: false }), true);
+  assert.equal(p.tracker.timeoutLeftMin(a.id, p.now()), 10);
+});
