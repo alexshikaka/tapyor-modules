@@ -312,3 +312,18 @@ test('бот: своё сообщение в чате не становится 
   await bot._onChat({ message_id: 'self-msg', chatter_user_id: '100', chatter_user_login: 'alexshikaka', badges: [{ set_id: 'broadcaster' }], message: { text: '@alexshikaka уточни: исполнитель — название' } });
   assert.equal(calls, 0);
 });
+
+test('лицензия выключена: бот не стартует, награда за баллы — на паузу', async () => {
+  const { licenseOff } = require('../src/bot');
+  const P = Bot.prototype; const origIds = P.ids, origPause = P.setRewardPaused, origStart = P.start;
+  const calls = [];
+  P.ids = function () { return { broadcaster: { load: async () => calls.push('load') } }; };
+  P.setRewardPaused = async function (p) { calls.push('pause:' + p); };
+  P.start = async function () { calls.push('start'); };
+  try {
+    assert.equal(await licenseOff(fakeCore({})), true);
+    assert.deepEqual(calls, ['load', 'pause:true']);
+    P.setRewardPaused = async function () { throw new Error('нет сети'); };
+    assert.equal(await licenseOff(fakeCore({})), false); // ошибка не роняет ядро
+  } finally { P.ids = origIds; P.setRewardPaused = origPause; P.start = origStart; }
+});

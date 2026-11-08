@@ -495,5 +495,13 @@ class Bot {
 }
 
 async function activate(core, deps) { const bot = new Bot(core, deps); await bot.start(); return bot; }
+// Привратник ядра выключил модуль (триал кончился, нет лицензии): бот не запускается, но награда за баллы
+// на Twitch ставится на паузу — иначе зрители тратили бы баллы, а заказ никто не принял бы.
+// Настройки и вход Twitch не трогаются: купил ключ — всё включается как было.
+async function licenseOff(core, deps) {
+  const bot = new Bot(core, deps);
+  try { const { broadcaster } = bot.ids(); await broadcaster.load(); await bot.setRewardPaused(true); return true; }
+  catch (e) { core.log && core.log('бот: пауза награды при выключении — ' + (e && e.message || e)); return false; }
+}
 
-module.exports = { Bot, activate, DEFAULT_SETTINGS, outcomeText, parseSim };
+module.exports = { Bot, activate, licenseOff, DEFAULT_SETTINGS, outcomeText, parseSim };
