@@ -27,7 +27,7 @@ class Points {
   // r: { id, at, input (текст зрителя), user: { id, login } }
   async handle(r) {
     if (!this.cfg.accepting || !this.cfg.pointsOn) return this.refund(r, 'closed');
-    const res = await this.limiter.run(() => this.core.findOrder(r.input, { catalogsOnly: false }));
+    const res = await this.limiter.run(() => this.core.findOrder(r.input, { catalogsOnly: false, paid: true }));
     const found = (res && res.value) || { level: 'none' };
     if (found.level === 'none' || !found.track) return this.refund(r, 'notFound');
     const rule = this.core.checkTrack(found.track);

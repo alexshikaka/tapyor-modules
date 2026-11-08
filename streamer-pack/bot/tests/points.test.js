@@ -56,3 +56,10 @@ test('правила ядра — возврат с причиной', async () 
   await p.handle(R('ария беспечный ангел'));
   assert.match(said.at(-1), /трек слишком длинный/);
 });
+test('баллы — платный заказ: ядро получает paid, сомнительный канон уходит стримеру', async () => {
+  const { p, core, said } = make();
+  await p.handle(R('ария беспечный ангел'));
+  assert.equal(core.calls.at(-1).o.paid, true);
+  assert.equal(await p.handle(R('лирика', 'r2')), 'queued-doubt');
+  assert.equal(core.added.at(-1).doubt, true);
+});
