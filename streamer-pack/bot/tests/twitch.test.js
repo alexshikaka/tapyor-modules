@@ -381,6 +381,26 @@ test('бот: вход — в общем логе только роль, ник 
   assert.match(line.text, /вход стримера/);
 });
 
+// ---------- ошибка сохранения входа ----------
+test('бот: вход не сохранился — в чеклисте «вход не сохранён: …»', async () => {
+  const core = botCore();
+  core.secure.set = async () => ({ ok: false, error: 'шифрование Windows недоступно' });
+  const fetch = router({ 'GET /oauth2/validate': () => ({ json: { user_id: '100', login: 'alexshikaka', scopes: [], expires_in: 3600 } }) });
+  const bot = new Bot(core, { fetch, setInterval: () => 0, clearInterval: () => {} });
+  const user = await bot.ids().broadcaster.signedIn({ access: 'AT', refresh: 'RT', expiresAt: 9e15 });
+  assert.equal(user.login, 'alexshikaka'); // вход на этот запуск работает
+  assert.equal(core._health['bot.login'].st, 'warn');
+  assert.match(core._health['bot.login'].text, /^вход не сохранён: шифрование Windows недоступно/);
+});
+
+test('бот: старое ядро (secure.set без ответа) — тревоги нет', async () => {
+  const core = botCore();
+  const fetch = router({ 'GET /oauth2/validate': () => ({ json: { user_id: '100', login: 'alexshikaka', scopes: [], expires_in: 3600 } }) });
+  const bot = new Bot(core, { fetch, setInterval: () => 0, clearInterval: () => {} });
+  await bot.ids().broadcaster.signedIn({ access: 'AT', refresh: 'RT', expiresAt: 9e15 });
+  assert.ok(!core._health['bot.login'] || !/не сохранён/.test(core._health['bot.login'].text));
+});
+
 test('лицензия выключена: бот не стартует, награда за баллы — на паузу', async () => {
   const { licenseOff } = require('../src/bot');
   const P = Bot.prototype; const origIds = P.ids, origPause = P.setRewardPaused, origStart = P.start;

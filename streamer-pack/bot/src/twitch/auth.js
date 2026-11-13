@@ -67,9 +67,10 @@ async function validate(access, { fetch = globalThis.fetch } = {}) {
 
 // Хранилище одного входа (бот или стример) поверх core.secure. Само обновляет токен, когда он истекает.
 class Identity {
-  constructor(name, { secure, fetch = globalThis.fetch, now = Date.now, log = () => {}, journal = null }) {
+  constructor(name, { secure, fetch = globalThis.fetch, now = Date.now, log = () => {}, journal = null, onSaveError = null }) {
     this.name = name; this.secure = secure; this.fetch = fetch; this.now = now; this.log = log;
     this.journal = journal; // журнал бота: сюда можно ник, в общий лог Тапёра — нельзя
+    this.onSaveError = onSaveError; // ядро не смогло сохранить секрет — сказать стримеру
     this.tokens = null; this.user = null; this.refreshing = null;
   }
   key() { return 'twitch.' + this.name; }
@@ -78,7 +79,16 @@ class Identity {
     if (!raw) return false;
     try { const s = JSON.parse(raw); this.tokens = s.tokens; this.user = s.user; return true; } catch (_) { return false; }
   }
-  async save() { await this.secure.set(this.key(), JSON.stringify({ tokens: this.tokens, user: this.user })); }
+  // Новое ядро при недоступном шифровании Windows секрет не сохраняет и возвращает { ok:false, error }.
+  // Старое — undefined. Молча терять вход нельзя: стример должен увидеть это в чеклисте.
+  async save() {
+    const r = await this.secure.set(this.key(), JSON.stringify({ tokens: this.tokens, user: this.user }));
+    if (r && r.ok === false) {
+      const msg = r.error ? String(r.error) : 'неизвестная ошибка';
+      if (typeof this.onSaveError === 'function') this.onSaveError(msg);
+    }
+    return r;
+  }
   async clear() { this.tokens = null; this.user = null; await this.secure.set(this.key(), ''); }
   get connected() { return !!(this.tokens && this.user); }
 

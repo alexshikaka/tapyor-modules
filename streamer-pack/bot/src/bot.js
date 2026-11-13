@@ -103,9 +103,11 @@ class Bot {
     const secure = this.core.secure, fetch = this.fetch, now = this.now, log = this.log;
     // Ник входа — только в журнал бота: в общий лог Тапёра он не должен попадать.
     const journal = (t) => this.journalAdd('sys', t);
+    // Ядро не сохранило секрет (нет шифрования Windows) — стример видит это в чеклисте.
+    const onSaveError = (e) => this.health('login', 'warn', 'вход не сохранён: ' + e, 'login');
     if (!this._ids || this._ids.mode !== s.identity) {
-      const broadcaster = new Identity('broadcaster', { secure, fetch, now, log, journal });
-      const chat = s.identity === 'self' ? broadcaster : new Identity('bot', { secure, fetch, now, log, journal });
+      const broadcaster = new Identity('broadcaster', { secure, fetch, now, log, journal, onSaveError });
+      const chat = s.identity === 'self' ? broadcaster : new Identity('bot', { secure, fetch, now, log, journal, onSaveError });
       this._ids = { mode: s.identity, broadcaster, chat };
     }
     return this._ids;
