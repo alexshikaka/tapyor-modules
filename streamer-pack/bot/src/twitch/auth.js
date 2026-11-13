@@ -12,7 +12,9 @@ class TwitchError extends Error {
 function form(obj) { return new URLSearchParams(obj).toString(); }
 
 async function post(fetch, url, params) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(params) });
+  // Без срока запрос мог висеть вечно: стример видел «вход», а ответа не было.
+  // Ошибка по сроку — та же, что при обрыве сети: fetch прерывается и отдаёт свою ошибку.
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form(params), signal: AbortSignal.timeout(15000) });
   let body = null; try { body = await r.json(); } catch (_) { /* пусто */ }
   return { status: r.status, ok: r.ok, body };
 }
@@ -56,7 +58,7 @@ async function refresh(tokens, { fetch = globalThis.fetch, now = Date.now, clien
 
 // Проверка токена (Twitch просит делать это раз в час). Возвращает { userId, login, scopes, expiresIn } или null.
 async function validate(access, { fetch = globalThis.fetch } = {}) {
-  const r = await fetch(ID_URL + '/validate', { headers: { Authorization: 'OAuth ' + access } });
+  const r = await fetch(ID_URL + '/validate', { headers: { Authorization: 'OAuth ' + access }, signal: AbortSignal.timeout(15000) });
   if (r.status === 401) return null;
   if (!r.ok) throw new TwitchError('Twitch не ответил на проверку входа', r.status);
   const b = await r.json();

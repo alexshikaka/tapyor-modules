@@ -2,7 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
-const { startDevice, Identity } = require('../src/twitch/auth');
+const { startDevice, Identity, validate } = require('../src/twitch/auth');
+const { Helix } = require('../src/twitch/helix');
 const { EventSub } = require('../src/twitch/eventsub');
 const { Bot } = require('../src/bot');
 const { fakeCore, track } = require('./fakes');
@@ -311,6 +312,58 @@ test('бот: своё сообщение в чате не становится 
   bot.sentIds.add('self-msg');
   await bot._onChat({ message_id: 'self-msg', chatter_user_id: '100', chatter_user_login: 'alexshikaka', badges: [{ set_id: 'broadcaster' }], message: { text: '@alexshikaka уточни: исполнитель — название' } });
   assert.equal(calls, 0);
+});
+
+// ---------- тайм-ауты запросов Twitch ----------
+// Подделка fetch, которая не отвечает: ждёт сигнал отмены и падает, как при обрыве сети.
+function hang(signal) {
+  return new Promise((resolve, reject) => {
+    if (signal) signal.addEventListener('abort', () => reject(signal.reason));
+  });
+}
+// Настоящие 15 секунд в тесте не ждём: подменяем AbortSignal.timeout на короткий,
+// но требуем, чтобы модуль просил ровно 15 000 мс.
+async function withShortTimeout(fn) {
+  const orig = AbortSignal.timeout;
+  AbortSignal.timeout = (ms) => {
+    assert.equal(ms, 15000, 'срок запроса Twitch — 15 секунд');
+    const c = new AbortController();
+    setTimeout(() => c.abort(new Error('время вышло')), 10);
+    return c.signal;
+  };
+  try { return await fn(); } finally { AbortSignal.timeout = orig; }
+}
+
+test('вход: запрос кода без ответа обрывается по тайм-ауту', async () => {
+  await withShortTimeout(async () => {
+    const fetch = (url, opt = {}) => {
+      assert.ok(opt.signal instanceof AbortSignal, 'fetch получил signal');
+      return hang(opt.signal);
+    };
+    await assert.rejects(startDevice({ scopes: ['user:read:chat'], fetch, sleep: async () => {}, now: () => 0 }), /время вышло/);
+  });
+});
+
+test('вход: проверка токена без ответа обрывается по тайм-ауту', async () => {
+  await withShortTimeout(async () => {
+    const fetch = (url, opt = {}) => {
+      assert.ok(opt.signal instanceof AbortSignal, 'fetch получил signal');
+      return hang(opt.signal);
+    };
+    await assert.rejects(validate('AT', { fetch }), /время вышло/);
+  });
+});
+
+test('Helix: запрос без ответа обрывается по тайм-ауту', async () => {
+  await withShortTimeout(async () => {
+    const fetch = (url, opt = {}) => {
+      assert.ok(opt.signal instanceof AbortSignal, 'fetch получил signal');
+      return hang(opt.signal);
+    };
+    const helix = new Helix({ fetch });
+    const identity = { token: async () => 'AT', user: { id: '1' } };
+    await assert.rejects(helix.call(identity, 'GET', '/streams'), /время вышло/);
+  });
 });
 
 test('лицензия выключена: бот не стартует, награда за баллы — на паузу', async () => {

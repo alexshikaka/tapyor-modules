@@ -14,7 +14,8 @@ class Helix {
       const r = await this.fetch(url, {
         method,
         headers: { Authorization: 'Bearer ' + token, 'Client-Id': this.clientId, ...(body ? { 'Content-Type': 'application/json' } : {}) },
-        body: body ? JSON.stringify(body) : undefined
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15000) // иначе зависший запрос держал бы бота без ответа
       });
       if (r.status === 401 && attempt === 0) continue;
       if (r.status === 429 && attempt === 0) { // «слишком часто» — ждём, сколько просит Twitch, и пробуем ещё раз
