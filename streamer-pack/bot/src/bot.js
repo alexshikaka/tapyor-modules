@@ -101,9 +101,11 @@ class Bot {
   ids() {
     const s = this.settings();
     const secure = this.core.secure, fetch = this.fetch, now = this.now, log = this.log;
+    // Ник входа — только в журнал бота: в общий лог Тапёра он не должен попадать.
+    const journal = (t) => this.journalAdd('sys', t);
     if (!this._ids || this._ids.mode !== s.identity) {
-      const broadcaster = new Identity('broadcaster', { secure, fetch, now, log });
-      const chat = s.identity === 'self' ? broadcaster : new Identity('bot', { secure, fetch, now, log });
+      const broadcaster = new Identity('broadcaster', { secure, fetch, now, log, journal });
+      const chat = s.identity === 'self' ? broadcaster : new Identity('bot', { secure, fetch, now, log, journal });
       this._ids = { mode: s.identity, broadcaster, chat };
     }
     return this._ids;

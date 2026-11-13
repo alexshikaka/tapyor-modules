@@ -53,7 +53,7 @@ streamer-pack/
 | событие `order:dropped(id, why)` | заказ не прозвучал (убран, не заиграл) — для баллов: вернуть |
 | событие `order:ban(id, minutes)` | стример нажал ⛔ у заказа «Твич» |
 | `core.health.set(lineId, state, text, action)` | строки «Чат-бот · …» в стартовом чеклисте; `state`: `ok` / `warn` / `bad` |
-| `core.journal.load()` / `.append(entry)` | журнал бота в файл по дням (7 дней), чтобы пережил перезапуск. Тексты чата — только здесь, не в логе Тапёра |
+| `core.journal.load()` / `.append(entry)` | журнал бота в файл по дням (7 дней), чтобы пережил перезапуск. **Ники и тексты чата — только здесь**, не в логе Тапёра |
 | `core.hotkeys.register(id, handler)` | горячая клавиша (например, «открыть событие») |
 | `core.http.mount(prefix, handler)` / `.unmount(prefix)` | своя страница на локальном сервере Тапёра (тот же порт, что у панели OBS, по умолчанию 47654). Только `GET`, префикс — одно слово (`/overlay`). `handler(req, res, sub, query)` |
 | `core.http.url(path)` | полный адрес страницы для OBS (`http://127.0.0.1:47654/overlay/playlist`) |

@@ -366,6 +366,21 @@ test('Helix: запрос без ответа обрывается по тайм
   });
 });
 
+// ---------- ник входа: общий лог Тапёра и журнал бота ----------
+test('бот: вход — в общем логе только роль, ник только в журнале бота', async () => {
+  const core = botCore();
+  const logs = [];
+  core.log = (t) => logs.push(String(t));
+  const fetch = router({ 'GET /oauth2/validate': () => ({ json: { user_id: '100', login: 'alexshikaka', scopes: [], expires_in: 3600 } }) });
+  const bot = new Bot(core, { fetch, setInterval: () => 0, clearInterval: () => {} });
+  await bot.ids().broadcaster.signedIn({ access: 'AT', refresh: 'RT', expiresAt: 9e15 });
+  assert.ok(logs.some((t) => /Twitch: вход стримера выполнен/.test(t)), 'роль в общем логе есть');
+  assert.ok(!logs.some((t) => t.includes('alexshikaka')), 'ника в общем логе нет');
+  const line = bot.journal.find((x) => x.text.includes('alexshikaka'));
+  assert.ok(line, 'ник есть в журнале бота');
+  assert.match(line.text, /вход стримера/);
+});
+
 test('лицензия выключена: бот не стартует, награда за баллы — на паузу', async () => {
   const { licenseOff } = require('../src/bot');
   const P = Bot.prototype; const origIds = P.ids, origPause = P.setRewardPaused, origStart = P.start;

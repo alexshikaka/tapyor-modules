@@ -67,8 +67,9 @@ async function validate(access, { fetch = globalThis.fetch } = {}) {
 
 // Хранилище одного входа (бот или стример) поверх core.secure. Само обновляет токен, когда он истекает.
 class Identity {
-  constructor(name, { secure, fetch = globalThis.fetch, now = Date.now, log = () => {} }) {
+  constructor(name, { secure, fetch = globalThis.fetch, now = Date.now, log = () => {}, journal = null }) {
     this.name = name; this.secure = secure; this.fetch = fetch; this.now = now; this.log = log;
+    this.journal = journal; // журнал бота: сюда можно ник, в общий лог Тапёра — нельзя
     this.tokens = null; this.user = null; this.refreshing = null;
   }
   key() { return 'twitch.' + this.name; }
@@ -87,7 +88,9 @@ class Identity {
     if (!v) throw new TwitchError('Twitch не принял вход', 401);
     this.user = { id: v.userId, login: v.login };
     await this.save();
-    this.log('Twitch: вход ' + ({ broadcaster: 'стримера', bot: 'бота' }[this.name] || this.name) + ' — ' + v.login);
+    const role = { broadcaster: 'стримера', bot: 'бота' }[this.name] || this.name;
+    this.log('Twitch: вход ' + role + ' выполнен'); // общий лог Тапёра — только роль, без ника
+    if (typeof this.journal === 'function') this.journal('Twitch: вход ' + role + ' — ' + v.login);
     return this.user;
   }
 
