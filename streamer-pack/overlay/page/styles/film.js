@@ -9,7 +9,9 @@
     build: function (root) {
       root.classList.add('film');
       var row = K.h('div', 'row'), cov = K.cover('film-cover'), txt = K.h('div', 'textcol');
-      txt.append(K.text('title', 'title'), K.text('artist', 'artist'), K.text('time', 'time'), K.text('who', 'who'));
+      var meta = K.h('div', 'meta-line');
+      meta.append(K.text('artist', 'artist'), K.text('time', 'time'));
+      txt.append(K.text('title', 'title'), meta, K.text('who', 'who'));
       row.append(cov, txt); root.append(row);
       root.append(K.viz('b', 40, { cls: 'film-viz' }), K.queue());
     }

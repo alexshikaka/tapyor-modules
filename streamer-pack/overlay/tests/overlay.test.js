@@ -56,7 +56,7 @@ test('настройки: пусто → значения по умолчани�
 });
 test('настройки: мусор отбрасывается, числа зажимаются', () => {
   const c = normalize({ pos: 'zz', size: 999, count: 50, dx: 'abc', color: 'red', lang: 'de', viz: 'x', outline: 'да', evil: 1 });
-  assert.equal(c.pos, 'br'); assert.equal(c.size, 150); assert.equal(c.count, 10); assert.equal(c.dx, 0);
+  assert.equal(c.pos, 'br'); assert.equal(c.size, 250); assert.equal(c.count, 10); assert.equal(c.dx, 0);
   assert.equal(c.color, '#FFB000'); assert.equal(c.lang, 'en'); assert.equal(c.viz, 'wave'); assert.equal(c.outline, true);
   assert.equal('evil' in c, false);
 });

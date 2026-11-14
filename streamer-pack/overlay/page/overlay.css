@@ -2,6 +2,8 @@
    data-h (l|c|r) и data-v (t|b) ставятся на #ov и на корень стиля. */
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 body { font-synthesis: none; }
+/* hidden должен побеждать любые display из стилей: иначе выключатели «Что показывать» не работают. */
+#ov [hidden] { display: none !important; }
 
 #ov {
   position: absolute;
@@ -41,6 +43,22 @@ body { font-synthesis: none; }
 .style-root[data-h="r"] .row { flex-direction: row-reverse; }
 .style-root[data-h="c"] .row { justify-content: center; }
 .style-root[data-h="r"] .vu-head { flex-direction: row-reverse; }
+/* №13, №22, №27: исполнитель и время — одна строка; длинная уходит в сторону и не режется. */
+.meta-line { display: flex; align-items: baseline; min-width: 0; }
+.meta-line > * { flex: none; }
+.style-root[data-h="r"] .meta-line { justify-content: flex-end; }
+.style-root[data-h="l"] .meta-line { justify-content: flex-start; }
+.style-root[data-h="c"] .meta-line { justify-content: safe center; }
+/* Строка «исполнитель + стрелки VU» тоже зеркалится: стрелки у дальнего края. */
+.style-root[data-h="r"] .vu-line { flex-direction: row-reverse; }
+/* Столбики, сегменты и лента растут от правого края; шкала прогресса тоже. */
+.style-root[data-h="r"] .vz-b,
+.style-root[data-h="r"] .vz-sp,
+.style-root[data-h="r"] .vz-g { flex-direction: row-reverse; }
+.style-root[data-h="r"] .prog { flex-direction: row-reverse; }
+/* Горизонтальная очередь-лента: справа чипы идут от правого края, по центру — по центру. */
+.style-root[data-h="r"] .ribbon-queue { flex-direction: row-reverse; }
+.style-root[data-h="c"] .ribbon-queue { justify-content: center; }
 .style-root[data-h="r"][data-style="citypop"] { flex-direction: row-reverse; }
 .style-root[data-v="b"][data-nr="1"] { flex-direction: column; }
 
@@ -84,11 +102,18 @@ body { font-synthesis: none; }
 
 /* Текст: название бывает бегущей строкой, исполнитель и ник не режутся. */
 .title, .artist, .who, .time, .meta { min-width: 0; }
+/* Колонка текста должна ужиматься: иначе длинное название растягивает её по min-content,
+   и бегущая строка не включается (clientWidth оказывается шириной всего текста). */
+.textcol { min-width: 0; }
 .title { white-space: nowrap; }
 .artist, .who { white-space: nowrap; }
 .who { font-size: .8em; line-height: 1.2; opacity: .92; }
-.queue { min-width: 0; display: flex; flex-direction: column; }
-.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+/* Очередь режется по своему краю, а строка прижата к домашнему краю:
+   короткая — к краю очереди, длинная уходит за противоположный край и обрезается. */
+.queue { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: max-content; max-width: none; align-self: flex-start; }
+.style-root[data-h="r"] .queue > div { align-self: flex-end; }
+.style-root[data-h="c"] .queue > div { align-self: center; }
 .queue .q-who { opacity: .72; }
 .style-root[data-v="b"] .queue { flex-direction: column-reverse; }
 .style-root[data-nr="1"] .queue { flex-direction: column; }
@@ -106,9 +131,21 @@ body { font-synthesis: none; }
 .prog i { display: block; flex: 1; background: var(--c0, rgba(255,255,255,.25)); }
 .prog i.on { background: var(--c); }
 
-/* Общая чёрная обводка для гладких шрифтов; пиксельные стили переопределяют. */
-#ov.outline { paint-order: stroke fill; }
+/* Чёрная обводка текста: пиксельные — тень по 8 направлениям, гладкие — обводка букв.
+   Свойства наследуются, поэтому правило на корне стиля обводит всё его тексты. */
 #ov.outline .style-root.glow { text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+#ov.outline .style-root:not(.pixel) { -webkit-text-stroke: 1.5px #000; paint-order: stroke fill; }
+#ov.outline .style-root.pixel {
+  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
+    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
+}
+/* Тонкий тёмный контур у блоков: обложка, визуализатор, шкала прогресса. */
+#ov.outline .style-root .cover-slot,
+#ov.outline .style-root [data-role="viz"],
+#ov.outline .style-root [data-role="prog"] {
+  outline: 1px solid rgba(0,0,0,.72);
+  outline-offset: 1px;
+}
 
 /* Тишина: оверлей остаётся в кадре, но пустой. */
 #idle {
@@ -138,8 +175,4 @@ body.idle #ov { display: none; }
 #ov.motion-hidden { visibility: hidden; }
 #ov.motion-in { visibility: visible; }
 
-/* Пиксельная обводка (8 теней) — только для пиксельных стилей. */
-#ov.outline .style-root.pixel {
-  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
-    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
-}
+

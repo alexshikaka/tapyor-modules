@@ -4,6 +4,7 @@
   'use strict';
 
   var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz, M = window.TapMotionMath;
+  var T = window.TapTextFit;
   var DEMO_LIB = window.TapDemo;
   var DOPT = DEMO_LIB.options(location.search);
   var PREVIEW = DOPT.preview;
@@ -18,6 +19,26 @@
   var ov = document.getElementById('ov');
   var idle = document.getElementById('idle');
   var DEFS = window.TapStyles || {};
+  // Что у стиля реально есть (зеркало src/styles.js). Нет описания — работаем по-старому.
+  var META = window.TapStyleMeta || {};
+  var DEMO_FEATURE_KEYS = ['outline', 'nick', 'cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang',
+    'count', 'fade', 'fadePct', 'fill', 'nums', 'viz', 'smooth'];
+
+  function featuresOf(style) {
+    var m = META[style];
+    return m && Array.isArray(m.features) ? m.features : null;
+  }
+  // Ключ, которого у стиля нет, молча ничего не делает.
+  function hasFeature(style, key) {
+    var f = featuresOf(style);
+    return !f || f.indexOf(key) >= 0;
+  }
+  function coverOn(cfg) {
+    return hasFeature(cfg.style, 'cover') ? cfg.cover !== false : true;
+  }
+  function marqOn(cfg) {
+    return hasFeature(cfg.style, 'marq') && cfg.marq !== false;
+  }
 
   function pageDefaults() {
     return {
@@ -27,8 +48,10 @@
       time: true, osc: true, prog: true, marq: true, lang: 'en', viz: 'wave', smooth: 'mid',
       motion: {
         style: 'dos', pos: 'bc', dx: 0, dy: 0, size: 100,
-        color: '#FFFFFF', vizColor: '#C8F542', outline: true, nick: true,
-        scene: 'brand', hold: 5
+        color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true,
+        scene: 'brand', hold: 5,
+        cover: true, time: true, spin: true, prog: true, osc: true, marq: true,
+        lang: 'en', viz: 'wave', smooth: 'mid'
       }
     };
   }
@@ -52,12 +75,15 @@
   function currentCfg() {
     if (!MOTION) return CFG;
     var m = CFG.motion && typeof CFG.motion === 'object' ? CFG.motion : CFG;
+    // У моушна свои «Что показывать»; ключей очереди у него нет никогда.
     return {
       style: m.style || 'dos', pos: m.pos || 'bc', dx: m.dx || 0, dy: m.dy || 0, size: m.size || 100,
-      color: m.color || '#FFFFFF', vizColor: m.vizColor || '#C8F542', outline: m.outline !== false,
-      nick: m.nick !== false, count: 0, fade: false, fadePct: 0, nums: false, cover: true,
-      time: true, osc: true, prog: true, marq: true, lang: CFG.lang || 'en', viz: CFG.viz || 'wave',
-      smooth: CFG.smooth || 'mid', scene: m.scene || 'brand', hold: m.hold || 5
+      color: m.color || '#FFB000', vizColor: m.vizColor || '#FFB000', outline: m.outline !== false,
+      nick: m.nick !== false, count: 0, fade: false, fadePct: 0, nums: false,
+      cover: m.cover !== false, time: m.time !== false, spin: m.spin !== false,
+      osc: m.osc !== false, prog: m.prog !== false, marq: m.marq !== false,
+      lang: m.lang === 'ru' ? 'ru' : m.lang === 'en' ? 'en' : '', viz: m.viz === 'spectrum' ? 'spectrum' : 'wave',
+      smooth: m.smooth || 'mid', scene: m.scene || 'brand', hold: m.hold || 5
     };
   }
 
@@ -69,6 +95,16 @@
     return c;
   }
 
+  // Демо/проверка: ?feat=key:0,key:1 меняет только известные ключи настроек.
+  function applyDemoFeatures() {
+    var f = DOPT.feat;
+    if (!f || !Object.keys(f).length) return;
+    var o = MOTION ? (CFG.motion && typeof CFG.motion === 'object' ? CFG.motion : CFG) : CFG;
+    Object.keys(f).forEach(function (k) {
+      if (DEMO_FEATURE_KEYS.indexOf(k) >= 0) o[k] = f[k];
+    });
+  }
+
   function setDemoConfig() {
     var id = DEFS[FORCE_STYLE] ? FORCE_STYLE : (MOTION ? CFG.motion.style : CFG.style);
     var p = palette(id);
@@ -76,12 +112,23 @@
     CFG.motion.color = p.T; CFG.motion.vizColor = p.V;
     CFG.motion.style = id;
     if (FORCE_POS) CFG.motion.pos = FORCE_POS;
+    // ?dx=&dy=&size= — проверка сдвига и размера на настоящей странице.
+    CFG.dx = DOPT.dx; CFG.dy = DOPT.dy; CFG.size = DOPT.size;
+    CFG.motion.dx = DOPT.dx; CFG.motion.dy = DOPT.dy; CFG.motion.size = DOPT.size;
   }
 
   function applyConfig(raw) {
     var c = raw && typeof raw === 'object' ? raw : CFG;
     if (MOTION && (!c.motion || typeof c.motion !== 'object')) {
-      c = Object.assign({}, c, { motion: { style: c.style, pos: 'bc', color: c.color, vizColor: c.vizColor, scene: 'brand', hold: 5 } });
+      var dm = pageDefaults().motion;
+      c = Object.assign({}, c, {
+        motion: Object.assign({}, dm, {
+          style: c.style || dm.style,
+          pos: /^[tb][lcr]$/.test(c.pos) ? c.pos : dm.pos,
+          color: c.color || dm.color,
+          vizColor: c.vizColor || c.color || dm.vizColor
+        })
+      });
     }
     CFG = c;
     ov.hidden = false;
@@ -138,8 +185,9 @@
     S.root.dataset.h = pl.h; S.root.dataset.v = pl.v;
     var box = D.boxStyle(cfg);
     for (var k in box) ov.style[k] = box[k];
+    var has = function (key) { return hasFeature(cfg.style, key); };
     ov.classList.toggle('outline', !!cfg.outline);
-    ov.classList.toggle('no-cover', !cfg.cover);
+    ov.classList.toggle('no-cover', has('cover') && !coverOn(cfg));
     ov.classList.toggle('paused', !!S.paused);
 
     ov.style.setProperty('--c', cfg.color || '#fff');
@@ -149,19 +197,18 @@
     var vars = C.variables(p, cfg.color || '#fff', cfg.vizColor || cfg.color || '#fff');
     Object.keys(vars).forEach(function (name) { ov.style.setProperty(name, vars[name]); });
 
-    S.roles.time && (S.roles.time.hidden = !cfg.time);
-    S.roles.prog && (S.roles.prog.hidden = !cfg.prog);
-    S.root.querySelectorAll('[data-role="viz"]').forEach(function (v) { v.hidden = !cfg.osc; });
+    if (S.roles.time) S.roles.time.hidden = has('time') ? !cfg.time : false;
+    if (S.roles.prog) S.roles.prog.hidden = has('prog') ? !cfg.prog : false;
+    S.root.querySelectorAll('[data-role="viz"]').forEach(function (v) { v.hidden = has('osc') ? !cfg.osc : false; });
     S.root.querySelectorAll('[data-role="queue"]').forEach(function (q) { q.hidden = MOTION; });
-    if (S.coverSlot) S.coverSlot.hidden = !cfg.cover;
+    S.root.querySelectorAll('[data-role="spin"]').forEach(function (el) { el.hidden = has('spin') ? !cfg.spin : false; });
+    if (S.coverSlot) S.coverSlot.hidden = has('cover') ? !cfg.cover : false;
+    // Подписи TRACK/ARTIST: у стиля без ключа lang атрибут не ставится, CSS просто молчит.
+    S.root.dataset.lang = has('lang') ? (cfg.lang === 'ru' ? 'ru' : cfg.lang === 'en' ? 'en' : 'off') : '';
   }
 
   function winampLine(cfg) {
-    var np = S.np;
-    if (!np) return '';
-    var line = '*** ' + (np.artist || '—') + ' - ' + np.title + ' ***';
-    if (cfg.nick && np.who) line = line.replace(/ \*\*\*$/, ' · заказ: ' + np.who + ' ***');
-    return line;
+    return T.winampText(S.np, cfg.nick, S.np && S.np.who);
   }
 
   function setTexts(cfg) {
@@ -192,22 +239,29 @@
 
   function renderQueue(cfg) {
     var q = S.roles.queue; if (!q) return;
-    var list = (S.next || []).slice(0, cfg.count);
-    var sig = JSON.stringify(list) + '|' + cfg.nums + '|' + cfg.fade + '|' + cfg.fadePct + '|' + cfg.nick;
+    var cnt = hasFeature(cfg.style, 'count') ? cfg.count : (S.next || []).length;
+    var numsOn = hasFeature(cfg.style, 'nums') ? cfg.nums : true;
+    var fadeOn = hasFeature(cfg.style, 'fade') ? cfg.fade !== false : true;
+    var list = (S.next || []).slice(0, cnt);
+    var sig = JSON.stringify(list) + '|' + numsOn + '|' + fadeOn + '|' + cfg.fadePct + '|' + cfg.nick;
     if (sig === S.queueSig) return;
     S.queueSig = sig;
     q.textContent = '';
     list.forEach(function (it, i) {
       var d = document.createElement('div');
-      var pref = cfg.nums ? (i + 1) + '. ' : '';
-      d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
+      if (cfg.style === 'winamp') {
+        d.textContent = T.winampQueueRow(it, i, numsOn);
+      } else {
+        var pref = numsOn ? (i + 1) + '. ' : '';
+        d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
+      }
       if (cfg.nick && it.who) {
         var w = document.createElement('span');
         w.className = 'q-who';
         w.textContent = ' · ' + it.who;
         d.appendChild(w);
       }
-      d.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
+      d.style.opacity = D.fadeAt(i, fadeOn, cfg.fadePct);
       d.dataset.n = String(i + 1);
       q.appendChild(d);
     });
@@ -217,8 +271,16 @@
     var np = S.np;
     if (!S.roles.time || !np) return;
     var pos = D.posAt(np, Date.now()), paused = !np.playing;
-    var t = D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--');
-    if (paused) t += ' · ' + (cfg.lang === 'ru' ? 'ПАУЗА' : 'PAUSED');
+    var t;
+    if (cfg.style === 'winamp') {
+      // Winamp: крупное время — только текущая позиция (в макете «01:32», без «/04:03»),
+      // иначе 50-пиксельные цифры занимают всю строку и душат эквалайзер.
+      t = T.winampClock(pos);
+    } else {
+      t = D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--');
+      var ru = cfg.lang === 'ru' && hasFeature(cfg.style, 'lang');
+      if (paused) t += ' · ' + (ru ? 'ПАУЗА' : 'PAUSED');
+    }
     if (S.roles.time.textContent !== t) S.roles.time.textContent = t;
     if (S.roles.prog) {
       var p = S.roles.prog;
@@ -235,11 +297,23 @@
   function updateCover(cfg) {
     var slot = S.coverSlot;
     if (!slot) return;
+    var url = coverOn(cfg) && S.np ? (S.np.cover || '') : '';
+    var action = T.coverAction(url, S.coverUrl, !!slot.querySelector('.cover-img, canvas.cover-canvas'));
+    if (action === 'clear') {
+      slot.querySelectorAll('.cover-img, canvas.cover-canvas').forEach(function (e) { e.remove(); });
+      slot.classList.remove('has-cover');
+      S.coverUrl = '';
+      return;
+    }
+    // Тот же файл: ничего не снимаем с экрана. Раньше обложка удалялась до этой проверки,
+    // и любой следующий снимок плеера (время, пауза, уровень) оставлял пустую заглушку.
+    if (action === 'keep') {
+      var im0 = slot.querySelector('.cover-img');
+      if (im0 && im0.complete) slot.classList.add('has-cover');
+      return;
+    }
     slot.querySelectorAll('.cover-img, canvas.cover-canvas').forEach(function (e) { e.remove(); });
     slot.classList.remove('has-cover');
-    var url = cfg.cover && S.np ? (S.np.cover || '') : '';
-    if (!url) { S.coverUrl = ''; return; }
-    if (url === S.coverUrl) { if (slot.querySelector('.cover-img, canvas.cover-canvas')) slot.classList.add('has-cover'); return; }
     S.coverUrl = url;
     if (S.def && S.def.pixel) {
       var c = document.createElement('canvas');
@@ -298,18 +372,37 @@
     return h === 'r' ? 'L' : h === 'l' ? 'R' : 'B';
   }
 
+  // Домашний край текста: справа — правый, слева — левый, по центру — середина.
+  function homeAlign(cfg) {
+    var h = (cfg.pos || 'br')[1];
+    return h === 'l' ? 'left' : h === 'c' ? 'center' : 'right';
+  }
+
   function rootBox() { return S.root.getBoundingClientRect(); }
 
-  function freeExtra(el, dir) {
-    var s = scaleNow(), R = rootBox(), r = el.getBoundingClientRect();
-    var ow = S.root.offsetWidth || 300;
-    var rightRoom = Math.max(0, (window.innerWidth - r.right) / s);
-    var leftRoom = Math.max(0, r.left / s);
-    var rightOverlay = Math.max(0, (R.right - r.right) / s + ow * 0.5);
-    var leftOverlay = Math.max(0, (r.left - R.left) / s + ow * 0.5);
-    if (dir === 'R') return Math.min(rightRoom, rightOverlay);
-    if (dir === 'L') return Math.min(leftRoom, leftOverlay);
-    return Math.min(leftRoom, leftOverlay) + Math.min(rightRoom, rightOverlay);
+  // Координаты элемента внутри оверлея, до transform: scale. Сдвиг и размер сюда не входят.
+  function localBox(el) {
+    var s = scaleNow() || 1, R = rootBox(), r = el.getBoundingClientRect();
+    return { left: (r.left - R.left) / s, right: (r.right - R.left) / s };
+  }
+
+  function freeExtra(el, dir, need) {
+    var b = localBox(el), ow = S.root.offsetWidth || 300;
+    // Запас меряется только от края оверлея: положение на экране и сдвиг не участвуют.
+    return T.titleReserve(dir, b.left, b.right, 0, ow, ow, need);
+  }
+
+  // По центру коробка названия растёт в обе стороны, но не залезает на обложку:
+  // запас ограничен удвоенным зазором до блока обложки.
+  function centerLimit(el, extra) {
+    var cap = S.root.offsetWidth || 300;
+    var cv = coverBlockEl();
+    if (cv && !cv.hidden && cv.offsetParent) {
+      var b = localBox(el), c = localBox(cv);
+      if (c.right <= b.left + 1) cap = Math.min(cap, 2 * Math.max(0, b.left - c.right));
+      else if (c.left >= b.right - 1) cap = Math.min(cap, 2 * Math.max(0, c.left - b.right));
+    }
+    return Math.min(extra, cap);
   }
 
   function resetText(el) {
@@ -330,13 +423,18 @@
   }
 
   function marquee(el, text, horizontal) {
-    var gap = '      ';
+    // Сначала убираем обычный текст: иначе он остаётся стоять перед бегущей копией
+    // (так название резалось в №8, а Winamp показывал статичный хвост строки).
+    el.textContent = '';
     var sp = document.createElement('span');
     sp.className = horizontal ? 'mq' : 'mqv';
-    sp.textContent = text + gap + text + gap;
+    sp.textContent = T.marqueeText(text);
     el.appendChild(sp);
     var size = horizontal ? sp.scrollWidth : sp.scrollHeight;
     sp.style.animationDuration = Math.max(6, Math.round(size / 2 / 45)) + 's';
+    // На правом крае текст по умолчанию прижат вправо: начало строки ушло бы за коробку.
+    // Для бегущей строки важно видеть начало сразу, поэтому внутри коробки — слева.
+    if (horizontal) el.style.textAlign = 'left';
   }
 
   function fitVerticalTitle(cfg) {
@@ -346,12 +444,17 @@
     var col = S.root.querySelector('[data-col="vertical"]');
     var was = t.style.display;
     t.style.display = 'none';                 // колонку мерим без названия, иначе она тянется за ним
-    var max = Math.max(col ? col.offsetHeight : 0, 300);
+    var colH = col ? col.offsetHeight : 0;
     t.style.display = was;
-    if (t.scrollHeight <= max + 1) return;
-    t.style.height = max + 'px';
+    var plan = T.verticalPlan(colH, t.scrollHeight, 300);
+    // Буквы вертикального шрифта шире строки (боковые выносы) — коробку расширяем,
+    // иначе владелец видит обрезанные сбоку буквы и обводку.
+    var tw = Math.max(t.clientWidth, t.scrollWidth);
+    if (tw > t.clientWidth) t.style.width = tw + 'px';
+    if (!plan.run) return;                     // короткому высоту не задаём — стоит как в образце
+    t.style.height = plan.height + 'px';
     t.style.overflow = 'hidden';
-    marquee(t, S.np.title, false);
+    if (marqOn(cfg)) marquee(t, S.np.title, false);
   }
 
   function fitTitle(cfg) {
@@ -362,36 +465,52 @@
     t.style.overflow = 'hidden';
     t.style.whiteSpace = 'nowrap';
     if (cfg.style === 'code') {
-      if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
+      if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
       return;
     }
     if (cfg.style === 'winamp') {
       var wl = winampLine(cfg);
       t.textContent = wl;
       var box = t.parentElement;
-      if (box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
+      // Строка занимает всю ширину строки Winamp: так её край совпадает с краем оверлея,
+      // а бегущая копия не растягивает коробку на всю длину текста.
+      t.style.display = 'block';
+      t.style.width = '100%';
+      if (marqOn(cfg) && box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
       return;
     }
     // №7 «Нижняя лента»: справа эквалайзер, запаса нет — длинное название сразу бежит в своей колонке.
     if (cfg.style === 'ribbon') {
-      if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
+      if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
       return;
     }
     var base = t.clientWidth;
     var need = Math.max(0, t.scrollWidth - base);
     if (need <= 0) return;
-    var dir = awayDir(t), free = freeExtra(t, dir), extra = Math.max(0, Math.min(need, free));
+    var dir = awayDir(t), extra;
+    if (homeAlign(cfg) === 'center') {
+      // По центру запас открывается в обе стороны — иначе середина строки уезжает.
+      dir = 'B';
+      extra = centerLimit(t, freeExtra(t, dir, need));
+    } else {
+      extra = freeExtra(t, dir, need);
+    }
     // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
-    extra = M.reserveExtra(base, extra, MOTION, free);
+    if (MOTION) extra = T.motionExtra(base, extra);
+    // По центру и в моушне коробка не должна залезть на обложку — режем запас после удвоения.
+    if (homeAlign(cfg) === 'center') extra = centerLimit(t, extra);
     if (extra > 0) {
+      var bx = T.titleBox(base, extra, dir);
       t.style.flex = '0 0 auto';
-      t.style.width = (base + extra) + 'px';
-      if (dir === 'L') t.style.marginLeft = (-extra) + 'px';
-      else if (dir === 'B') { t.style.marginLeft = (-extra / 2) + 'px'; t.style.marginRight = (-extra / 2) + 'px'; }
-      t.style.textAlign = dir === 'L' ? 'right' : dir === 'B' ? 'center' : 'left';
+      t.style.width = bx.width + 'px';
+      if (bx.marginLeft) t.style.marginLeft = bx.marginLeft + 'px';
+      if (bx.marginRight) t.style.marginRight = bx.marginRight + 'px';
+      // Домашний край не переставляем: коробка растёт в сторону от обложки,
+      // а текст остаётся прижат к своему краю (справа/слева/по центру).
+      t.style.textAlign = cfg.style === 'code' ? 'left' : homeAlign(cfg);
       S.root.querySelectorAll('.textcol, .title-line, .title-box').forEach(function (p) { p.style.overflow = 'visible'; });
     }
-    if (t.scrollWidth > t.clientWidth + 1) {
+    if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) {
       var tx = S.np.title;
       t.textContent = '';
       t.textContent = tx;
@@ -401,50 +520,54 @@
 
   function compactStyle(cfg) { return cfg.style === 'ribbon' || cfg.style === 'vu'; }
 
+  // Длинная строка не режется и не тащит за собой домашний край: коробка
+  // расширяется на вылет, а домашний край остаётся на месте (отрицательное поле).
+  function growLine(el, cfg) {
+    var spill = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (!spill) return;
+    var h = homeAlign(cfg);
+    el.style.width = 'max-content';
+    if (h === 'right') { el.style.marginLeft = (-spill) + 'px'; return; }
+    if (h === 'left') return;
+    // По центру: у обложки сбоку уходим в сторону от неё, иначе растём в обе стороны.
+    var dir = awayDir(el);
+    if (dir === 'L') el.style.marginLeft = (-spill) + 'px';
+    else if (dir === 'B') el.style.marginLeft = (-spill / 2) + 'px';
+  }
+
   function fitArtist(cfg) {
     var a = S.roles.artist; if (!a || !S.np || a.hidden) return;
-    if (cfg.style === 'winamp') return;
+    if (cfg.style === 'winamp' || cfg.style === 'code') return;
     resetText(a);
     a.textContent = S.np.artist || '';
-    var dir = awayDir(a);
     if (compactStyle(cfg)) {
+      // №7 лента и №20 VU: рядом визуализатор — длинный исполнитель бежит в своём месте.
       a.style.overflow = 'hidden';
       a.style.whiteSpace = 'nowrap';
-      if (a.scrollWidth > a.clientWidth + 1) marquee(a, S.np.artist || '', true);
+      if (marqOn(cfg) && a.scrollWidth > a.clientWidth + 1) marquee(a, S.np.artist || '', true);
       return;
     }
+    // Обычные стили: текст целиком, длинный уходит к центру экрана и не режется.
     a.style.overflow = 'visible';
     a.style.whiteSpace = 'nowrap';
-    a.style.width = 'max-content';
-    a.style.maxWidth = 'none';
-    a.style.alignSelf = dir === 'R' ? 'flex-start' : dir === 'L' ? 'flex-end' : 'center';
-    a.style.textAlign = dir === 'R' ? 'left' : dir === 'L' ? 'right' : 'center';
-    var room = a.parentElement ? a.parentElement.clientWidth : a.clientWidth;
-    var spill = Math.max(0, a.scrollWidth - room);
-    if (spill && dir !== 'R') {
-      a.style.position = 'relative';
-      a.style.left = (dir === 'L' ? -spill : -spill / 2) + 'px';
-    }
+    a.style.textAlign = homeAlign(cfg);
+    growLine(a, cfg);
   }
 
   function fitWho(cfg) {
     var w = S.roles.who; if (!w || w.hidden || !S.np) return;
+    if (cfg.style === 'winamp' || cfg.style === 'code') return;
     resetText(w);
     if (!(cfg.nick && S.np.who)) return;
     w.textContent = 'заказ: ' + S.np.who;
-    if (compactStyle(cfg)) return;           // стиль сам обрезает многоточием
-    var dir = awayDir(w);
-    w.style.overflow = 'visible';
-    w.style.width = 'max-content';
-    w.style.maxWidth = 'none';
-    w.style.alignSelf = dir === 'R' ? 'flex-start' : dir === 'L' ? 'flex-end' : 'center';
-    w.style.textAlign = dir === 'R' ? 'left' : dir === 'L' ? 'right' : 'center';
-    var room = w.parentElement ? w.parentElement.clientWidth : w.clientWidth;
-    var spill = Math.max(0, w.scrollWidth - room);
-    if (spill && dir !== 'R') {
-      w.style.position = 'relative';
-      w.style.left = (dir === 'L' ? -spill : -spill / 2) + 'px';
+    w.style.whiteSpace = 'nowrap';
+    if (compactStyle(cfg)) {
+      // Стиль сам обрезает ник многоточием (№7, №20).
+      return;
     }
+    w.style.overflow = 'visible';
+    w.style.textAlign = homeAlign(cfg);
+    growLine(w, cfg);
   }
 
   function fitAll() {
@@ -493,6 +616,9 @@
       if (now - S.vizPausedAt > 2600) return;
     } else S.vizPausedAt = 0;
     var lv = paused ? 0 : levelNow(now);
+    var alpha = D.smoothAlpha(cfg.smooth);
+    // DOS-лента умеет переключаться «волна/спектр»; остальные стили рисуют свой вид всегда.
+    var specMode = cfg.style === 'dos' && cfg.viz === 'spectrum';
     S.root.querySelectorAll('[data-viz]').forEach(function (z) {
       if (z.closest('[hidden]')) return;
       var st = getViz(z), kind = z.dataset.viz, n = Number(z.dataset.cols) || z.children.length;
@@ -501,12 +627,16 @@
         for (var i = 0; i < n; i++) {
           var t = paused ? 0 : specAt(i, n, now, liveSpec);
           var cur = st.shown[i] || 0;
-          st.shown[i] = V.next(cur, t);
+          st.shown[i] = V.next(cur, t, alpha);
         }
       } else if (kind === 'sp') {
         if (!paused && (!st.last || now - st.last > 170)) {
           st.last = now;
-          V.historyPush(st.hist, lv, 0.05);
+          if (specMode && liveSpec) {
+            for (var q = 0; q < n; q++) st.hist[q] = V.next(st.hist[q] || 0, interp(S.spec, q, n), alpha);
+          } else {
+            V.historyPush(st.hist, lv, 0.05);
+          }
         }
         if (paused) for (var h = 0; h < n; h++) st.hist[h] *= 0.82;
       }
@@ -532,7 +662,8 @@
         for (var p = 0; p < z.children.length; p++) z.children[p].style.height = Math.max(3, (st.hist[p] || 0) * 100) + '%';
       } else if (kind === 'nd') {
         var nd = z.querySelector('.needle');
-        var angle = V.needleAngle(target);
+        st.shown[0] = V.next(st.shown[0] || 0, target, alpha);
+        var angle = V.needleAngle(st.shown[0]);
         if (nd) nd.style.transform = 'rotate(' + angle.toFixed(2) + 'deg)';
       } else if (kind === 'w') {
         drawWave(z, st, paused, now, liveSpec);
@@ -630,7 +761,9 @@
     if (cfg.pos[1] !== 'c') return;
     var b = seenBox(); if (!b) return;
     // Центр не коробки, а всего видимого — прямо в координатах окна 1920.
-    var d = M.centerShift({ left: 0, right: window.innerWidth }, b.U);
+    // Сдвиг dx переносит и центр: моушн не должен «съедать» сдвиг.
+    var dx = Number(cfg.dx) || 0;
+    var d = M.centerShift({ left: dx, right: window.innerWidth + dx }, b.U);
     if (Math.abs(d) > 0.5) ov.style.translate = d + 'px 0';
   }
 
@@ -803,8 +936,7 @@
     }
     if (FORCE_NICK === '1') { CFG.nick = true; CFG.motion.nick = true; }
     if (FORCE_NICK === '0') { CFG.nick = false; CFG.motion.nick = false; }
-    if (DEMO) setDemoConfig();
-    if (DEMO) startDemo();
+    if (DEMO) { setDemoConfig(); applyDemoFeatures(); startDemo(); }
     else {
       // До первого снимка показываем пустую сцену без текста.
       applyConfig(CFG);
@@ -827,6 +959,20 @@
     requestAnimationFrame(rafLoop);
     window.addEventListener('resize', function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
+    // Только для проверок (?demo=1): меняет сдвиг/размер без перезагрузки страницы.
+    // В OBS demo нет, поэтому хук не появляется.
+    if (DEMO) {
+      window.TapDemoSet = function (o) {
+        o = o || {};
+        ['dx', 'dy', 'size'].forEach(function (k) {
+          if (o[k] == null) return;
+          CFG[k] = o[k];
+          if (CFG.motion && typeof CFG.motion === 'object') CFG.motion[k] = o[k];
+        });
+        applyConfig(CFG);
+        updateCover(currentCfg());
+      };
+    }
   }
 
   window.TapOverlayApp = { start: init };

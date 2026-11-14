@@ -10,4 +10,9 @@
 [data-style="ribbon"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
 [data-style="ribbon"] .queue{flex-direction:row;gap:18px;margin-top:6px;font-size:20px;overflow:hidden}
 [data-style="ribbon"] .queue>div{flex:none;max-width:100%}
+/* Сильнее правила [data-v="b"] .queue ниже: справа лента идёт от правого края. */
+.style-root[data-style="ribbon"][data-h="r"] .queue{flex-direction:row-reverse}
+.style-root[data-style="ribbon"][data-h="c"] .queue{justify-content:center;flex-direction:row}
+[data-style="ribbon"][data-v="b"] .queue{flex-direction:row}
+[data-style="ribbon"] .queue>div{flex:none;max-width:100%}
 [data-style="ribbon"][data-v="b"] .queue{flex-direction:row}

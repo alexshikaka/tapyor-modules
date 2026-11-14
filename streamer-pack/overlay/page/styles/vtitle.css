@@ -1,7 +1,9 @@
 .style-root[data-style="vtitle"]{width:300px;color:var(--c)}
 [data-style="vtitle"] .vtitle-main{display:flex;gap:12px;align-items:stretch}
 [data-style="vtitle"][data-h="r"] .vtitle-main{flex-direction:row-reverse;text-align:right}
-[data-style="vtitle"] .vtitle-title{writing-mode:vertical-rl;transform:rotate(180deg);font-family:Oswald,sans-serif;font-size:40px;line-height:1;color:var(--v);white-space:nowrap;max-height:100%;align-self:flex-start}
+[data-style="vtitle"] .vtitle-title{writing-mode:vertical-rl;transform:rotate(180deg);font-family:Oswald,sans-serif;font-size:40px;line-height:1;color:var(--v);white-space:nowrap;align-self:stretch;flex:none;padding:2px;margin:0 -2px}
+/* Справа вертикальное название читается сверху вниз, без поворота (как в макете). */
+[data-style="vtitle"][data-h="r"] .vtitle-title{transform:none}
 [data-style="vtitle"] .vtitle-col{flex:1 1 auto;min-width:0;font-family:Manrope,sans-serif;font-weight:800}
 [data-style="vtitle"] .row{gap:10px;align-items:center}
 [data-style="vtitle"] .cover-slot{width:56px;height:56px}

@@ -13,7 +13,9 @@
       var center = K.h('div', 'radar-center'); center.append(K.cover('radar-cover')); radar.append(center);
       radar.append(K.h('i', 'radar-dot radar-dot1'), K.h('i', 'radar-dot radar-dot2'));
       var txt = K.h('div', 'textcol');
-      txt.append(K.text('title', 'title'), K.text('artist', 'artist'), K.text('time', 'time'), K.text('who', 'who'));
+      var meta = K.h('div', 'meta-line');
+      meta.append(K.text('artist', 'artist'), K.text('time', 'time'));
+      txt.append(K.text('title', 'title'), meta, K.text('who', 'who'));
       txt.append(K.viz('sp', 24, { cls: 'radar-viz' }));
       row.append(radar, txt); root.append(row, K.queue());
     }

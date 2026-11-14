@@ -19,7 +19,17 @@ const MOTION_DEFAULTS = Object.freeze({
   outline: true,
   nick: true,
   scene: 'brand',
-  hold: 5
+  hold: 5,
+  // Свои «Что показывать» у моушна: без ключей очереди (count/fade/fill/nums).
+  cover: true,
+  time: true,
+  spin: true,
+  prog: true,
+  osc: true,
+  marq: true,
+  lang: 'en',
+  viz: 'wave',
+  smooth: 'mid'
 });
 
 const DEFAULTS = Object.freeze({
@@ -27,7 +37,7 @@ const DEFAULTS = Object.freeze({
   pos: 'br',          // первая буква — верх/низ (t/b), вторая — лево/центр/право (l/c/r)
   dx: 0,              // сдвиг от угла, px экрана 1920×1080
   dy: 0,
-  size: 100,          // %, 80–150
+  size: 100,          // %, 80–250
   color: '#FFB000',   // цвет текста
   vizColor: '#FFB000', // цвет визуализатора
   outline: true,      // чёрная пиксельная обводка
@@ -50,6 +60,7 @@ const DEFAULTS = Object.freeze({
 });
 
 const BOOL = ['outline', 'nick', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
+const MOTION_BOOL = ['outline', 'nick', 'cover', 'time', 'spin', 'osc', 'prog', 'marq'];
 
 function clampNum(v, lo, hi, def) {
   const n = Number(v);
@@ -63,6 +74,13 @@ function normColor(v, def) {
   if (/^#[0-9a-f]{3}$/i.test(s)) return ('#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]).toUpperCase();
   return def;
 }
+function normLang(v, def) { return v === 'ru' || v === 'en' ? v : def; }
+function normViz(v, def) {
+  if (v === 'spectrum') return 'spectrum';
+  if (v === 'wave' || v === 'real' || v === 'fake') return 'wave';
+  return def;
+}
+function normSmooth(v, def) { return ['fast', 'mid', 'slow'].includes(v) ? v : def; }
 
 function normMotion(raw, base) {
   const r = raw && typeof raw === 'object' ? raw : {};
@@ -71,11 +89,13 @@ function normMotion(raw, base) {
   if (POSITIONS.includes(r.pos)) out.pos = r.pos;
   out.dx = clampNum(r.dx, -900, 900, out.dx);
   out.dy = clampNum(r.dy, -500, 500, out.dy);
-  out.size = clampNum(r.size, 80, 150, out.size);
+  out.size = clampNum(r.size, 80, 250, out.size);
   out.color = normColor(r.color, out.color);
   out.vizColor = normColor(r.vizColor, out.vizColor);
-  out.outline = typeof r.outline === 'boolean' ? r.outline : out.outline;
-  out.nick = typeof r.nick === 'boolean' ? r.nick : out.nick;
+  for (const k of MOTION_BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];
+  out.lang = normLang(r.lang, out.lang);
+  out.viz = normViz(r.viz, out.viz);
+  out.smooth = normSmooth(r.smooth, out.smooth);
   if (SCENES.includes(r.scene)) out.scene = r.scene;
   out.hold = clampNum(r.hold, 3, 15, out.hold);
   if (base && base.scene && !SCENES.includes(r.scene)) out.scene = base.scene;
@@ -90,16 +110,15 @@ function normalize(raw) {
   if (POSITIONS.includes(r.pos)) out.pos = r.pos;
   out.dx = clampNum(r.dx, -900, 900, DEFAULTS.dx);
   out.dy = clampNum(r.dy, -500, 500, DEFAULTS.dy);
-  out.size = clampNum(r.size, 80, 150, DEFAULTS.size);
+  out.size = clampNum(r.size, 80, 250, DEFAULTS.size);
   out.color = normColor(r.color, DEFAULTS.color);
   out.vizColor = normColor(r.vizColor, out.color);
   out.count = clampNum(r.count, 0, MAX_COUNT, DEFAULTS.count);
   out.fadePct = clampNum(r.fadePct, 0, 100, DEFAULTS.fadePct);
   for (const k of BOOL) if (typeof r[k] === 'boolean') out[k] = r[k];
-  if (r.lang === 'ru' || r.lang === 'en') out.lang = r.lang;
-  if (r.viz === 'spectrum') out.viz = 'spectrum';
-  else if (r.viz === 'wave' || r.viz === 'real' || r.viz === 'fake') out.viz = 'wave';
-  if (['fast', 'mid', 'slow'].includes(r.smooth)) out.smooth = r.smooth;
+  out.lang = normLang(r.lang, out.lang);
+  out.viz = normViz(r.viz, out.viz);
+  out.smooth = normSmooth(r.smooth, out.smooth);
   out.motion = normMotion(r.motion, DEFAULTS.motion);
   return out;
 }

@@ -5,8 +5,10 @@
 [data-style="blueprint"] .cover-slot{width:64px;height:64px;outline:2px solid var(--c);outline-offset:3px;background:var(--bg)}
 [data-style="blueprint"] .textcol{flex:1 1 auto}
 [data-style="blueprint"] .title{color:var(--a2);font-size:22px}
-[data-style="blueprint"] .artist::before{content:"ARTIST: ";white-space:pre}
-[data-style="blueprint"] .time::before{content:"FIG.1 ";white-space:pre}
+[data-style="blueprint"][data-lang="en"] .artist::before{content:"ARTIST: ";white-space:pre}
+[data-style="blueprint"][data-lang="ru"] .artist::before{content:"АРТИСТ: ";white-space:pre}
+[data-style="blueprint"][data-lang="en"] .time::before{content:"FIG.1 ";white-space:pre}
+[data-style="blueprint"][data-lang="ru"] .time::before{content:"РИС.1 ";white-space:pre}
 [data-style="blueprint"] .viz-w{height:26px;margin:6px 0}
 [data-style="blueprint"] canvas{width:100%;height:26px}
 [data-style="blueprint"] .queue{border-top:1px dashed var(--c);padding-top:4px}
