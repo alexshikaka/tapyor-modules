@@ -114,3 +114,12 @@ test('OV4 №3: ?dx/?dy/?size читаются и зажимаются как н
   assert.equal(z.dy, 0);
   assert.equal(z.size, 100);
 });
+
+test('OV4 №11: обложка не снимается с экрана при том же файле', () => {
+  // Так обложка исчезала после каждого снимка плеера: файл тот же, а элемент уже удалён.
+  assert.equal(T.coverAction('http://x/c.jpg', 'http://x/c.jpg', true), 'keep');
+  assert.equal(T.coverAction('http://x/c.jpg', 'http://x/c.jpg', false), 'load');
+  assert.equal(T.coverAction('http://x/new.jpg', 'http://x/c.jpg', true), 'load');
+  assert.equal(T.coverAction('', 'http://x/c.jpg', true), 'clear');
+  assert.equal(T.coverAction('', '', false), 'clear');
+});

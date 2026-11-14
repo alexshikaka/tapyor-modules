@@ -297,11 +297,23 @@
   function updateCover(cfg) {
     var slot = S.coverSlot;
     if (!slot) return;
+    var url = coverOn(cfg) && S.np ? (S.np.cover || '') : '';
+    var action = T.coverAction(url, S.coverUrl, !!slot.querySelector('.cover-img, canvas.cover-canvas'));
+    if (action === 'clear') {
+      slot.querySelectorAll('.cover-img, canvas.cover-canvas').forEach(function (e) { e.remove(); });
+      slot.classList.remove('has-cover');
+      S.coverUrl = '';
+      return;
+    }
+    // Тот же файл: ничего не снимаем с экрана. Раньше обложка удалялась до этой проверки,
+    // и любой следующий снимок плеера (время, пауза, уровень) оставлял пустую заглушку.
+    if (action === 'keep') {
+      var im0 = slot.querySelector('.cover-img');
+      if (im0 && im0.complete) slot.classList.add('has-cover');
+      return;
+    }
     slot.querySelectorAll('.cover-img, canvas.cover-canvas').forEach(function (e) { e.remove(); });
     slot.classList.remove('has-cover');
-    var url = coverOn(cfg) && S.np ? (S.np.cover || '') : '';
-    if (!url) { S.coverUrl = ''; return; }
-    if (url === S.coverUrl) { if (slot.querySelector('.cover-img, canvas.cover-canvas')) slot.classList.add('has-cover'); return; }
     S.coverUrl = url;
     if (S.def && S.def.pixel) {
       var c = document.createElement('canvas');
@@ -485,6 +497,8 @@
     }
     // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
     if (MOTION) extra = T.motionExtra(base, extra);
+    // По центру и в моушне коробка не должна залезть на обложку — режем запас после удвоения.
+    if (homeAlign(cfg) === 'center') extra = centerLimit(t, extra);
     if (extra > 0) {
       var bx = T.titleBox(base, extra, dir);
       t.style.flex = '0 0 auto';
@@ -945,6 +959,20 @@
     requestAnimationFrame(rafLoop);
     window.addEventListener('resize', function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
+    // Только для проверок (?demo=1): меняет сдвиг/размер без перезагрузки страницы.
+    // В OBS demo нет, поэтому хук не появляется.
+    if (DEMO) {
+      window.TapDemoSet = function (o) {
+        o = o || {};
+        ['dx', 'dy', 'size'].forEach(function (k) {
+          if (o[k] == null) return;
+          CFG[k] = o[k];
+          if (CFG.motion && typeof CFG.motion === 'object') CFG.motion[k] = o[k];
+        });
+        applyConfig(CFG);
+        updateCover(currentCfg());
+      };
+    }
   }
 
   window.TapOverlayApp = { start: init };

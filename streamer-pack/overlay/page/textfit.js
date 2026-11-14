@@ -80,6 +80,13 @@
     return (nums ? (i + 1) + '. ' : '') + (t.artist ? t.artist + ' - ' : '') + (t.title || '');
   }
 
+  // Что делать с обложкой при очередном снимке плеера: не снимать ту же самую с экрана.
+  function coverAction(url, prevUrl, hasEl) {
+    if (!url) return 'clear';
+    if (url === prevUrl && hasEl) return 'keep';
+    return 'load';
+  }
+
   var api = {
     GAP: GAP,
     marqueeText: marqueeText,
@@ -90,7 +97,8 @@
     motionExtra: motionExtra,
     winampClock: winampClock,
     winampText: winampText,
-    winampQueueRow: winampQueueRow
+    winampQueueRow: winampQueueRow,
+    coverAction: coverAction
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TapTextFit = api;

@@ -43,13 +43,12 @@ body { font-synthesis: none; }
 .style-root[data-h="r"] .row { flex-direction: row-reverse; }
 .style-root[data-h="c"] .row { justify-content: center; }
 .style-root[data-h="r"] .vu-head { flex-direction: row-reverse; }
-/* №13, №22, №27: исполнитель и время стоят одной строкой, как в макете. */
-.style-root[data-style="swiss"] .artist,
-.style-root[data-style="film"] .artist,
-.style-root[data-style="radar"] .artist,
-.style-root[data-style="swiss"] .time,
-.style-root[data-style="film"] .time,
-.style-root[data-style="radar"] .time { display: inline; }
+/* №13, №22, №27: исполнитель и время — одна строка; длинная уходит в сторону и не режется. */
+.meta-line { display: flex; align-items: baseline; min-width: 0; }
+.meta-line > * { flex: none; }
+.style-root[data-h="r"] .meta-line { justify-content: flex-end; }
+.style-root[data-h="l"] .meta-line { justify-content: flex-start; }
+.style-root[data-h="c"] .meta-line { justify-content: safe center; }
 /* Строка «исполнитель + стрелки VU» тоже зеркалится: стрелки у дальнего края. */
 .style-root[data-h="r"] .vu-line { flex-direction: row-reverse; }
 /* Столбики, сегменты и лента растут от правого края; шкала прогресса тоже. */
