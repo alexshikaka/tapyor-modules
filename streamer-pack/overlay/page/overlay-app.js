@@ -62,7 +62,7 @@
     lastSse: Date.now(), builtStyle: '', root: null, def: null, roles: {},
     coverSlot: null, coverUrl: null, queueSig: '', prog: -1, paused: false,
     trackKey: '', firstTrack: true, motionTimer: null, motionAnims: [], demoAt: Date.now(),
-    demoIndex: 0, pausedLast: null, vizPausedAt: 0, ndPrev: 0
+    demoIndex: 0, pausedLast: null, vizPausedAt: 0, ndPrev: 0, motionCfg: ''
   };
 
   var DEMO_QUEUE = DEMO_LIB.queue(DOPT.queue);
@@ -847,6 +847,13 @@
       S.motionTimer = setTimeout(function () {
         ov.classList.add('motion-hidden');
         ov.classList.remove('motion-plate-on');
+        // Превью моушна в настройках живёт само: в простое — 1 секунда пустоты
+        // и снова появление, бесконечно, пока страница открыта.
+        if (PREVIEW && S.np) {
+          S.motionTimer = setTimeout(function () {
+            if (PREVIEW && S.np) showMotion();
+          }, 1000);
+        }
       }, reduce ? 280 : 450);
     }, hold * 1000);
   }
@@ -857,8 +864,16 @@
     if (key === S.trackKey) return;
     S.trackKey = key;
     if (!MOTION) return;
-    if (S.firstTrack) { S.firstTrack = false; return; }
-    showMotion();
+    var first = S.firstTrack;
+    S.firstTrack = false;
+    // OBS (без preview): только при смене трека, как раньше. Превью в настройках
+    // показывает первый трек сразу — иначе окно настроек остаётся пустым.
+    if (PREVIEW || !first) showMotion();
+  }
+
+  // Подпись настроек моушна: по ней видно, что пришёл новый cfg (окно настроек).
+  function motionSig(m) {
+    try { return JSON.stringify(m && typeof m === 'object' ? m : {}); } catch (e) { return ''; }
   }
 
   // ---------- данные ----------
@@ -867,6 +882,10 @@
     // В демо-режиме настройки и трек заданы ссылкой, живой поток их не перебивает.
     if (DEMO) return;
     var cfg = d.cfg;
+    // Превью моушна: любое изменение настроек работает как «Показать сейчас».
+    var sig = MOTION ? motionSig(cfg.motion) : '';
+    var changed = !!S.motionCfg && sig !== S.motionCfg;
+    S.motionCfg = sig;
     CFG = cfg;
     S.np = d.np || null;
     S.next = d.next || [];
@@ -874,6 +893,7 @@
     applyConfig(CFG);
     noteTrack(S.np);
     updateCover(currentCfg());
+    if (MOTION && PREVIEW && changed && S.np) showMotion();
   }
 
   function connectEvents() {

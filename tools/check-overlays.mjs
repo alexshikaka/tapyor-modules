@@ -1163,6 +1163,34 @@ if (motionMode) {
       await page.waitForTimeout(70);
     }
   }
+  async function isHidden() {
+    return page.evaluate(() => document.getElementById('ov').classList.contains('motion-hidden'));
+  }
+  async function waitHidden(maxMs) {
+    const t0 = Date.now();
+    for (;;) {
+      if (await isHidden()) return true;
+      if (Date.now() - t0 > maxMs) return false;
+      await page.waitForTimeout(80);
+    }
+  }
+  // Сколько раз за окно страница снова стала видимой (переход скрыто → видно).
+  async function countAppearances(ms) {
+    const t0 = Date.now();
+    let prev = null, n = 0;
+    while (Date.now() - t0 < ms) {
+      const hidden = await isHidden();
+      if (prev === true && hidden === false) n++;
+      prev = hidden;
+      await page.waitForTimeout(90);
+    }
+    return n;
+  }
+  async function hasClipAnim() {
+    return page.evaluate(() => document.getElementById('ov').getAnimations({ subtree: true }).some((a) => {
+      try { return a.effect.getKeyframes().some((k) => String(k.clipPath || '').includes('inset')); } catch (e) { return false; }
+    }));
+  }
   async function smoothAvg(smooth) {
     await applyMotion({ ...BASE, viz: 'spectrum', osc: true, smooth });
     fake.player.emit('level', 0);
@@ -1222,6 +1250,51 @@ if (motionMode) {
     if (long != null) fail('hold', 'hold=9 скрывает раньше 5 с', { long });
     console.log('… motion:', preview ? 'превью' : 'OBS', 'проверок', mChecks, 'ошибок', mBad);
   }
+
+  // ---------- OV6 §5: превью живёт само, в OBS — только смена трека и «Показать сейчас» ----------
+  const failLife = (key, msg, extra) => { mBad++; mFailures.push({ preview: null, key, msg, ...extra }); };
+  const motionWith = (o) => ({ ...BASE, hold: 3, ...o });
+  mChecks += 6;
+  // Превью: первый трек показывается сразу, в простое — бесконечный цикл с 1 с пустоты.
+  overlay.command('save', { motion: motionWith({ scene: 'brand' }) });
+  await openMPage(true);
+  overlay.command('preview-motion');
+  await page.waitForTimeout(120);
+  let shown = !(await isHidden());
+  if (!shown) failLife('preview-first', 'превью не показало первый трек', {});
+  let shows = 1 + await countAppearances(9000);
+  if (shows < 2) failLife('preview-loop', 'нет повторного появления в простое', { shows });
+  // Новый cfg в превью — как «Показать сейчас», даже если страница уже спряталась.
+  if (!(await waitHidden(6000))) failLife('preview-restart', 'страница не спряталась перед сменой настроек', {});
+  overlay.command('save', { motion: motionWith({ scene: 'mask' }) });
+  await page.waitForTimeout(500);
+  shown = !(await isHidden());
+  if (!shown) failLife('preview-restart', 'смена scene не показала страницу заново', {});
+  else if (!(await hasClipAnim())) failLife('preview-restart', 'смена scene не сменила анимацию появления', {});
+  if (!(await waitHidden(6000))) failLife('preview-color', 'страница не спряталась перед сменой цвета', {});
+  overlay.command('save', { motion: motionWith({ scene: 'brand', color: '#33FF66' }) });
+  await page.waitForTimeout(500);
+  shown = !(await isHidden());
+  if (!shown) failLife('preview-color', 'смена цвета не показала страницу заново', {});
+  // OBS: без preview первый трек не показывается, цикл не идёт, «Показать сейчас» и смена трека работают.
+  overlay.command('save', { motion: motionWith({ scene: 'brand' }) });
+  await openMPage(false);
+  await page.waitForTimeout(500);
+  if (!(await isHidden())) failLife('obs-first', 'OBS-страница показала трек сама', {});
+  overlay.command('preview-motion');
+  await page.waitForTimeout(300);
+  if (await isHidden()) failLife('obs-show', '«Показать сейчас» не показало моушн в OBS', {});
+  await page.waitForTimeout(4200);
+  if (!(await isHidden())) failLife('obs-hide', 'в OBS не спряталось после hold', {});
+  await page.waitForTimeout(1500);
+  if (!(await isHidden())) failLife('obs-loop', 'в OBS пошёл бесконечный цикл', {});
+  fake.player.emit('state', {
+    ...SNAP,
+    np: { ...SNAP.np, title: 'Другой трек', artist: 'Другой исполнитель', at: Date.now() }
+  });
+  await page.waitForTimeout(600);
+  if (await isHidden()) failLife('obs-track', 'смена трека не показала моушн в OBS', {});
+
   console.log(JSON.stringify({ mode: 'motion', checks: mChecks, bad: mBad, keys: KEYS.length + 1, failures: mFailures.slice(0, 30) }, null, 2));
   await browser.close(); server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
