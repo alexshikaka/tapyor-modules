@@ -1,0 +1,11 @@
+.style-root[data-style="card"]{width:340px;font:800 20px/1.15 Manrope,sans-serif}
+[data-style="card"] .row{gap:12px;align-items:center}
+[data-style="card"] .cover-slot{width:72px;height:72px;border-radius:12px}
+[data-style="card"] .textcol{flex:1 1 auto}
+[data-style="card"] .title{font-size:26px;line-height:1.1}
+[data-style="card"] .artist{font-size:19px;color:var(--c2);font-weight:700}
+[data-style="card"] .who{color:var(--c2)}
+[data-style="card"] .viz-b{height:18px;margin-top:5px}
+[data-style="card"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
+[data-style="card"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="card"] .queue{margin-top:8px;font-size:19px}

@@ -1,0 +1,10 @@
+.style-root[data-style="sys7"]{width:340px;font:24px/1 "Pixelify Sans",monospace;color:var(--c)}
+[data-style="sys7"] .row{gap:10px;align-items:center}
+[data-style="sys7"] .cover-slot{width:64px;height:64px;border:3px solid #000;background:#000}
+[data-style="sys7"] .textcol{flex:1 1 auto}
+[data-style="sys7"] .title{font-size:32px}
+[data-style="sys7"] .time{font-size:20px}
+[data-style="sys7"] .viz-b{height:22px;margin:6px 0}
+[data-style="sys7"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
+[data-style="sys7"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="sys7"] .queue{border-top:3px dotted var(--c);padding-top:5px;font-size:22px}

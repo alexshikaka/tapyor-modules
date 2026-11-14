@@ -5,8 +5,14 @@
   "license": "SEE LICENSE IN LICENSE",
   "author": "alexshikaka",
   "type": "commonjs",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "node --test streamer-pack/*/tests/*.test.js"
+    "test": "node --test streamer-pack/*/tests/*.test.js",
+    "check:overlays": "node tools/check-overlays.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
   }
 }

@@ -6,16 +6,47 @@
 const fs = require('fs');
 const path = require('path');
 const { normalize, DEFAULTS } = require('./settings');
+const { STYLE_DEFS } = require('./styles');
 const { buildFeed, cleanSnap } = require('./feed');
 
 const PAGE_DIR = path.join(__dirname, '..', 'page');
-// Страница отдаёт только эти файлы — никаких путей из запроса
+const MAX_CLIENTS = 16;
+const FONT_DIR = path.join(PAGE_DIR, 'fonts');
+const FONT_NAME = /^[a-z0-9-]+\.woff2$/;
+
+// Страница отдаёт только эти файлы — никаких путей из запроса.
+// Один список на обе страницы: плейлист и моушн используют одни шаблоны стилей.
+// Шрифты добавляются из содержимого папки по строгой маске: имя из запроса не становится путём.
 const PAGE_FILES = {
   '/playlist': ['playlist.html', 'text/html; charset=utf-8'],
+  '/motion': ['motion.html', 'text/html; charset=utf-8'],
   '/playlist.css': ['playlist.css', 'text/css; charset=utf-8'],
+  '/motion.css': ['motion.css', 'text/css; charset=utf-8'],
+  '/overlay.css': ['overlay.css', 'text/css; charset=utf-8'],
+  '/pack-fonts.css': ['fonts.css', 'text/css; charset=utf-8'],
   '/playlist.js': ['playlist.js', 'text/javascript; charset=utf-8'],
-  '/dos.js': ['dos.js', 'text/javascript; charset=utf-8']
+  '/motion.js': ['motion.js', 'text/javascript; charset=utf-8'],
+  '/overlay-app.js': ['overlay-app.js', 'text/javascript; charset=utf-8'],
+  '/style-kit.js': ['style-kit.js', 'text/javascript; charset=utf-8'],
+  '/dos.js': ['dos.js', 'text/javascript; charset=utf-8'],
+  '/colors.js': ['colors.js', 'text/javascript; charset=utf-8'],
+  '/viz.js': ['viz.js', 'text/javascript; charset=utf-8'],
+  '/motion-math.js': ['motion-math.js', 'text/javascript; charset=utf-8'],
+  '/demo.js': ['demo.js', 'text/javascript; charset=utf-8']
 };
+for (const s of STYLE_DEFS) {
+  PAGE_FILES['/styles/' + s.id + '.js'] = ['styles/' + s.id + '.js', 'text/javascript; charset=utf-8'];
+  PAGE_FILES['/styles/' + s.id + '.css'] = ['styles/' + s.id + '.css', 'text/css; charset=utf-8'];
+}
+// Белый список шрифтов пака: имена файлов из папки page/fonts по строгой маске.
+const FONT_FILES = (() => {
+  try {
+    return fs.readdirSync(FONT_DIR).filter((name) => FONT_NAME.test(name)).sort();
+  } catch (e) {
+    return [];                                  // папки ещё нет — страница просто без шрифтов
+  }
+})();
+for (const name of FONT_FILES) PAGE_FILES['/fonts/' + name] = ['fonts/' + name, 'font/woff2'];
 
 class Overlay {
   constructor(core, deps = {}) {
@@ -54,11 +85,14 @@ class Overlay {
   }
 
   obsCount() { let n = 0; for (const cl of this.clients) if (!cl.preview) n++; return n; }
+  // OBS-источники, которые смотрят именно моушн-страницу: превью из окна настроек не считается.
+  motionObs() { let n = 0; for (const cl of this.clients) if (cl.page === 'motion' && !cl.preview) n++; return n; }
 
-  // Ядро шлёт состояние плеера и уровни звука, только пока страницу кто-то смотрит
+  // Ядро шлёт состояние плеера и уровни звука, только пока страницу кто-то смотрит.
+  // Уровни нужны любой открытой странице: у каждого стиля есть визуализатор на живом звуке.
   want() {
     const any = this.clients.size > 0;
-    this.core.player.want({ state: any, levels: any && this.cfg.osc });
+    this.core.player.want({ state: any, levels: any });
     const obs = this.obsCount();
     if (obs !== this.obsWas) {
       this.core.log('оверлей: источников OBS — ' + obs);
@@ -87,7 +121,7 @@ class Overlay {
   }
 
   spectrum(x) {
-    if (!this.clients.size || this.cfg.viz !== 'spectrum' || !Array.isArray(x)) return;
+    if (!this.clients.size || !Array.isArray(x)) return;
     const arr = x.slice(0, 32).map((v) => Math.max(0, Math.min(1, Number(v) || 0)));
     this.spec = arr; this.specAt = Date.now();
     const chunk = 'event: spectrum\ndata: ' + JSON.stringify(arr) + '\n\n';
@@ -95,6 +129,17 @@ class Overlay {
   }
 
   ping() { for (const cl of this.clients) this.send(cl, 'event: hb\ndata: 1\n\n'); }
+
+  // «Показать сейчас» из окна настроек: открытые моушн-страницы проигрывают появление с текущим треком.
+  previewMotion() {
+    let sent = 0;
+    for (const cl of this.clients) {
+      if (cl.page !== 'motion') continue;
+      this.send(cl, 'event: show\ndata: 1\n\n');
+      sent++;
+    }
+    return { sent };
+  }
 
   handle(req, res, sub, query) {
     const q = query || new URLSearchParams();
@@ -108,9 +153,9 @@ class Overlay {
       return;
     }
     if (sub === '/events') {
-      if (this.clients.size >= 8) { res.writeHead(503); res.end('too many clients'); return; }
+      if (this.clients.size >= MAX_CLIENTS) { res.writeHead(503); res.end('too many clients'); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      const cl = { res, preview: q.get('preview') === '1' };
+      const cl = { res, preview: q.get('preview') === '1', page: q.get('page') === 'motion' ? 'motion' : 'playlist' };
       res.write('retry: 2000\n\n');
       this.clients.add(cl);
       if (typeof res.on === 'function') res.on('error', () => { if (this.clients.delete(cl)) this.want(); });
@@ -140,7 +185,12 @@ class Overlay {
       case 'settings': return { ...this.cfg };
       case 'defaults': return { ...DEFAULTS };
       case 'save': {
-        this.cfg = normalize({ ...this.cfg, ...(data || {}) });
+        // motion сливаем глубоко: частичный патч не сбрасывает остальные поля моушна.
+        const patch = { ...(data || {}) };
+        if (patch.motion && typeof patch.motion === 'object' && !Array.isArray(patch.motion)) {
+          patch.motion = { ...this.cfg.motion, ...patch.motion };
+        }
+        this.cfg = normalize({ ...this.cfg, ...patch });
         this.core.settings.set('overlay', this.cfg);
         this.want();
         this.broadcast();
@@ -153,7 +203,15 @@ class Overlay {
         this.broadcast();
         return { ...this.cfg };
       }
-      case 'status': return { obs: this.obsCount(), clients: this.clients.size, url: this.core.http.url ? this.core.http.url('/overlay/playlist') : '' };
+      case 'styles': return STYLE_DEFS.map((s) => ({ ...s }));
+      case 'preview-motion': return this.previewMotion();
+      case 'status': return {
+        obs: this.obsCount(),
+        motionObs: this.motionObs(),
+        clients: this.clients.size,
+        url: this.core.http.url ? this.core.http.url('/overlay/playlist') : '',
+        motionUrl: this.core.http.url ? this.core.http.url('/overlay/motion') : ''
+      };
       default: throw new Error('неизвестная команда оверлея: ' + cmd);
     }
   }
@@ -161,4 +219,4 @@ class Overlay {
 
 async function activate(core, deps) { const o = new Overlay(core, deps); o.start(); return o; }
 
-module.exports = { Overlay, activate, PAGE_FILES, cleanSnap };
+module.exports = { Overlay, activate, PAGE_FILES, FONT_FILES, MAX_CLIENTS, cleanSnap };
