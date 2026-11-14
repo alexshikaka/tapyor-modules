@@ -46,8 +46,8 @@
     var b = Number(base) || 0, e = Math.max(0, Number(extra) || 0);
     return {
       width: b + e,
-      marginLeft: side === 'L' ? -e : side === 'B' ? -e / 2 : 0,
-      marginRight: side === 'B' ? -e / 2 : 0
+      marginLeft: side === 'L' ? (e ? -e : 0) : side === 'B' ? (e ? -e / 2 : 0) : 0,
+      marginRight: side === 'B' ? (e ? -e / 2 : 0) : 0
     };
   }
 

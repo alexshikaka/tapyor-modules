@@ -112,6 +112,9 @@
     CFG.motion.color = p.T; CFG.motion.vizColor = p.V;
     CFG.motion.style = id;
     if (FORCE_POS) CFG.motion.pos = FORCE_POS;
+    // ?dx=&dy=&size= — проверка сдвига и размера на настоящей странице.
+    CFG.dx = DOPT.dx; CFG.dy = DOPT.dy; CFG.size = DOPT.size;
+    CFG.motion.dx = DOPT.dx; CFG.motion.dy = DOPT.dy; CFG.motion.size = DOPT.size;
   }
 
   function applyConfig(raw) {
@@ -359,16 +362,16 @@
 
   function rootBox() { return S.root.getBoundingClientRect(); }
 
-  function freeExtra(el, dir) {
-    var s = scaleNow(), R = rootBox(), r = el.getBoundingClientRect();
-    var ow = S.root.offsetWidth || 300;
-    var rightRoom = Math.max(0, (window.innerWidth - r.right) / s);
-    var leftRoom = Math.max(0, r.left / s);
-    var rightOverlay = Math.max(0, (R.right - r.right) / s + ow * 0.5);
-    var leftOverlay = Math.max(0, (r.left - R.left) / s + ow * 0.5);
-    if (dir === 'R') return Math.min(rightRoom, rightOverlay);
-    if (dir === 'L') return Math.min(leftRoom, leftOverlay);
-    return Math.min(leftRoom, leftOverlay) + Math.min(rightRoom, rightOverlay);
+  // Координаты элемента внутри оверлея, до transform: scale. Сдвиг и размер сюда не входят.
+  function localBox(el) {
+    var s = scaleNow() || 1, R = rootBox(), r = el.getBoundingClientRect();
+    return { left: (r.left - R.left) / s, right: (r.right - R.left) / s };
+  }
+
+  function freeExtra(el, dir, need) {
+    var b = localBox(el), ow = S.root.offsetWidth || 300;
+    // Запас меряется только от края оверлея: положение на экране и сдвиг не участвуют.
+    return T.titleReserve(dir, b.left, b.right, 0, ow, ow, need);
   }
 
   function resetText(el) {
@@ -449,14 +452,15 @@
     var base = t.clientWidth;
     var need = Math.max(0, t.scrollWidth - base);
     if (need <= 0) return;
-    var dir = awayDir(t), free = freeExtra(t, dir), extra = Math.max(0, Math.min(need, free));
+    var dir = awayDir(t), extra = freeExtra(t, dir, need);
     // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
-    extra = M.reserveExtra(base, extra, MOTION, free);
+    if (MOTION) extra = T.motionExtra(base, extra);
     if (extra > 0) {
+      var bx = T.titleBox(base, extra, dir);
       t.style.flex = '0 0 auto';
-      t.style.width = (base + extra) + 'px';
-      if (dir === 'L') t.style.marginLeft = (-extra) + 'px';
-      else if (dir === 'B') { t.style.marginLeft = (-extra / 2) + 'px'; t.style.marginRight = (-extra / 2) + 'px'; }
+      t.style.width = bx.width + 'px';
+      if (bx.marginLeft) t.style.marginLeft = bx.marginLeft + 'px';
+      if (bx.marginRight) t.style.marginRight = bx.marginRight + 'px';
       t.style.textAlign = dir === 'L' ? 'right' : dir === 'B' ? 'center' : 'left';
       S.root.querySelectorAll('.textcol, .title-line, .title-box').forEach(function (p) { p.style.overflow = 'visible'; });
     }
@@ -707,7 +711,9 @@
     if (cfg.pos[1] !== 'c') return;
     var b = seenBox(); if (!b) return;
     // Центр не коробки, а всего видимого — прямо в координатах окна 1920.
-    var d = M.centerShift({ left: 0, right: window.innerWidth }, b.U);
+    // Сдвиг dx переносит и центр: моушн не должен «съедать» сдвиг.
+    var dx = Number(cfg.dx) || 0;
+    var d = M.centerShift({ left: dx, right: window.innerWidth + dx }, b.U);
     if (Math.abs(d) > 0.5) ov.style.translate = d + 'px 0';
   }
 

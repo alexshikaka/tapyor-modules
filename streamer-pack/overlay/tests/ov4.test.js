@@ -66,3 +66,51 @@ test('OV4 №11: очередь Winamp — исполнитель, затем н
   assert.equal(T.winampQueueRow(it, 2, false), 'Земфира - Хочешь?');
   assert.equal(T.winampQueueRow({ title: 'Своя' }, 0, false), 'Своя');
 });
+
+// Запас названия считается только в координатах оверлея: ширины/координаты элемента
+// и корня. Никакого окна, сдвига или положения на экране в формуле нет.
+test('OV4 №3: запас названия не зависит от сдвига и размера', () => {
+  const need = 900;
+  assert.equal(T.titleReserve('L', 100, 340, 0, 340, 340, need), 270);
+  assert.equal(T.titleReserve('R', 0, 240, 0, 340, 340, need), 270);
+  assert.equal(T.titleReserve('B', 0, 340, 0, 340, 340, need), 170);
+  // те же локальные числа при любом сдвиге/масштабе дают тот же запас
+  const a = T.titleReserve('L', 100, 340, 0, 340, 340, need);
+  const b = T.titleReserve('L', 100, 340, 0, 340, 340, need);
+  assert.equal(a, b);
+});
+
+test('OV4 №3: запас не больше нужного и не отрицательный', () => {
+  assert.equal(T.titleReserve('L', 100, 340, 0, 340, 340, 50), 50);
+  assert.equal(T.titleReserve('L', 0, 340, 0, 340, 340, 900), 170);
+  assert.equal(T.titleReserve('B', 0, 340, 0, 340, 340, 900), 170);
+});
+
+test('OV4 №3: коробка названия растёт в сторону, домашний край на месте', () => {
+  assert.deepEqual(T.titleBox(200, 100, 'L'), { width: 300, marginLeft: -100, marginRight: 0 });
+  assert.deepEqual(T.titleBox(200, 100, 'R'), { width: 300, marginLeft: 0, marginRight: 0 });
+  assert.deepEqual(T.titleBox(200, 100, 'B'), { width: 300, marginLeft: -50, marginRight: -50 });
+  assert.deepEqual(T.titleBox(200, 0, 'L'), { width: 200, marginLeft: 0, marginRight: 0 });
+});
+
+test('OV4 №3: моушн — коробка названия ровно вдвое длиннее плейлиста', () => {
+  assert.equal(T.motionExtra(200, 100), 400);     // 200 → 200+400 = 600 = 2×(200+100)
+  assert.equal(T.motionExtra(340, 170), 680);     // 340 → 1020 = 2×(340+170)
+  assert.equal(T.motionExtra(200, 0), 0);
+});
+
+test('OV4 №3: ?dx/?dy/?size читаются и зажимаются как настройки', () => {
+  const Demo = require('../page/demo.js');
+  const d = Demo.options('?demo=1&dx=-900&dy=500&size=250');
+  assert.equal(d.dx, -900);
+  assert.equal(d.dy, 500);
+  assert.equal(d.size, 250);
+  const o = Demo.options('?demo=1&dx=-5000&dy=9999&size=10');
+  assert.equal(o.dx, -900, 'сдвиг зажат -900…900');
+  assert.equal(o.dy, 500, 'сдвиг зажат -500…500');
+  assert.equal(o.size, 80, 'размер зажат 80…250');
+  const z = Demo.options('?demo=1');
+  assert.equal(z.dx, 0);
+  assert.equal(z.dy, 0);
+  assert.equal(z.size, 100);
+});

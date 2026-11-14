@@ -1,4 +1,5 @@
-// Демо-данные страниц оверлея для превью без ядра: ?demo=1&style=&pos=&nick=&long=&track=&paused=1.
+// Демо-данные страниц оверлея для превью без ядра: ?demo=1&style=&pos=&nick=&long=&track=&paused=1,
+// ?dx=&dy=&size= — проверка сдвига и размера.
 // Чистые функции: работают на странице (window.TapDemo) и в Node (тесты).
 (function (root) {
   'use strict';
@@ -41,6 +42,12 @@
     return out;
   }
 
+  function num(v, def, lo, hi) {
+    var n = Number(v);
+    if (v == null || v === '' || !isFinite(n)) return def;
+    return Math.max(lo, Math.min(hi, Math.round(n)));
+  }
+
   function options(search) {
     var q = new URLSearchParams(search || '');
     var long = q.get('long') === '1';
@@ -55,6 +62,10 @@
       style: q.get('style') || '',
       pos: q.get('pos') || '',
       nick: q.get('nick'),
+      // Сдвиг и размер для проверок: те же границы, что в настройках модуля.
+      dx: num(q.get('dx'), 0, -900, 900),
+      dy: num(q.get('dy'), 0, -500, 500),
+      size: num(q.get('size'), 100, 80, 250),
       feat: parseFeat(q.get('feat'))
     };
   }
