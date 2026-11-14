@@ -12,7 +12,7 @@
 @keyframes dos-spin{to{transform:rotate(360deg)}}
 [data-style="dos"] .viz-sp{height:22px;margin:6px 0}
 [data-style="dos"] .vz-sp{display:flex;align-items:flex-end;gap:2px;height:100%}
-[data-style="dos"] .vz-sp i{flex:1;background:var(--c);height:10%}
+[data-style="dos"] .vz-sp i{flex:1;background:var(--v);height:10%}
 [data-style="dos"] .prog{height:14px;gap:3px;margin-bottom:4px}
 [data-style="dos"] .prog i{box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
 [data-style="dos"] .queue{border-top:3px solid var(--c);padding-top:4px;font-size:22px}

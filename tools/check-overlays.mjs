@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { EventEmitter } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -32,6 +33,7 @@ const outlineMode = args.get('outline') === '1';
 const alignMode = args.get('align') === '1';
 const shiftMode = args.get('shift') === '1';
 const queueMode = args.get('queue') === '1';
+const motionMode = args.get('motion') === '1';
 const shotDx = args.get('dx') || '0';
 const shotDy = args.get('dy') || '0';
 const shotSize = args.get('size') || '100';
@@ -57,13 +59,17 @@ function prepareCoreFonts(dir) {
 const coreFonts = prepareCoreFonts(coreDir);
 
 
+// Поддельный мост: настройки хранятся, события плеера можно слать из проверок (--motion).
+const em = new EventEmitter();
 const fake = {
-  settings: { get: () => null, set: () => {} },
+  store: null,
+  settings: { get: () => fake.store, set: (k, v) => { fake.store = v; } },
   http: { mount: (p, fn) => { fake.handle = fn; }, unmount: () => {}, url: (p) => `http://127.0.0.1:${port}${p}` },
   player: {
-    on: () => () => {},
+    on: (ev, fn) => { em.on(ev, fn); return () => em.off(ev, fn); },
     want: () => {},
-    coverImage: async () => null
+    coverImage: async () => null,
+    emit: (ev, x) => em.emit(ev, x)
   },
   log: (m) => { if (process.env.OVERLAY_DEBUG) console.log('[core]', m); }
 };
@@ -1035,6 +1041,191 @@ if (queueMode) {
   await browser.close(); server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
   process.exit(badCombos ? 1 : 0);
+}
+
+// ---------- режим --motion: каждая настройка моушна реально меняет страницу ----------
+// Сохраняем настройку через command('save', { motion }) на поддельном мосте и смотрим,
+// изменилась ли моушн-страница — и в превью (?preview=1), и в OBS-варианте.
+if (motionMode) {
+  const SNAP = {
+    np: {
+      title: "Set My Heart On Fire (I'm Alive x And The Beat Goes On) [Majestic VIP Mix]",
+      artist: 'Majestic, The Jammin Kid & Céline Dion', who: 'очень_длинный_ник_зрителя',
+      cover: '', pos: 30, dur: 243, playing: true, at: Date.now()
+    },
+    next: [], after: []
+  };
+  const BASE = {
+    style: 'dos', pos: 'br', dx: 0, dy: 0, size: 100,
+    color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true,
+    scene: 'brand', hold: 5, cover: true, time: true, spin: true, prog: true,
+    osc: true, marq: true, lang: 'en', viz: 'wave', smooth: 'mid'
+  };
+  const SPECTRUM = new Array(32).fill(0).map((_, i) => Math.min(1, 0.05 + i * 0.03));
+  const KEYS = [
+    ['style', ['dos', 'card']],
+    ['pos', ['br', 'tl']],
+    ['dx', [0, 120]],
+    ['dy', [0, 80]],
+    ['size', [100, 200]],
+    ['color', ['#FFB000', '#33FF66']],
+    ['vizColor', ['#FFB000', '#FF00AA']],
+    ['outline', [true, false]],
+    ['nick', [true, false], 'card'],
+    ['scene', ['mask', 'rush']],
+    ['cover', [true, false]],
+    ['time', [true, false]],
+    ['spin', [true, false]],
+    ['prog', [true, false]],
+    ['osc', [true, false]],
+    ['marq', [true, false]],
+    ['lang', ['en', 'ru']],
+    ['viz', ['wave', 'spectrum']],
+    ['smooth', ['slow', 'fast']]
+  ];
+  let mChecks = 0, mBad = 0;
+  const mFailures = [];
+  const SIG = () => page.evaluate(() => {
+    const ov = document.getElementById('ov');
+    const root = document.querySelector('.style-root');
+    if (!root || !ov) return { error: 'нет .style-root' };
+    const vis = (el) => {
+      if (!el || el.hidden) return false;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 || r.height > 0;
+    };
+    const pseudo = (el) => (el ? getComputedStyle(el, '::before').content || '' : '');
+    const boxes = [...root.querySelectorAll('[data-role="viz"]')];
+    const bar = root.querySelector('[data-role="viz"] i, [data-role="viz"] .needle');
+    return {
+      style: root.dataset.style, h: ov.dataset.h, v: ov.dataset.v,
+      // motion-in/motion-hidden — служебные классы видимости, их в подпись не берём.
+      cls: [...ov.classList].filter((c) => c === 'outline' || c === 'no-cover' || c === 'motion-plate-on').sort(),
+      pos: [ov.style.left, ov.style.right, ov.style.top, ov.style.bottom, ov.style.transform, ov.style.translate],
+      color: getComputedStyle(root).color,
+      vizColor: bar ? getComputedStyle(bar).backgroundColor : '',
+      views: [...root.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || ''),
+      visible: {
+        cover: vis(root.querySelector('[data-role="cover"]')),
+        time: vis(root.querySelector('[data-role="time"]')),
+        spin: vis(root.querySelector('[data-role="spin"]')),
+        prog: vis(root.querySelector('[data-role="prog"]')),
+        osc: boxes.some(vis),
+        who: vis(root.querySelector('[data-role="who"]')),
+        mq: !!root.querySelector('.mq, .mqv')
+      },
+      labels: {
+        title: pseudo(root.querySelector('[data-role="title"]')),
+        artist: pseudo(root.querySelector('[data-role="artist"]')),
+        time: pseudo(root.querySelector('[data-role="time"]'))
+      },
+      title: (root.querySelector('[data-role="title"]') || {}).textContent || '',
+      bars: [...root.querySelectorAll('[data-viz] i')].slice(0, 8).map((e) => Math.round((parseFloat(e.style.height) || 0) * 10) / 10),
+      anims: ov.getAnimations({ subtree: true }).map((a) => {
+        let k = [];
+        try { k = a.effect.getKeyframes().map((x) => [String(x.transform || ''), String(x.clipPath || ''), String(x.opacity || '')]); } catch (e) { /* без кадров */ }
+        return JSON.stringify([a.effect.getTiming().duration, k]);
+      }).sort()
+    };
+  });
+  // Подпись без быстро меняющихся столбиков: она для всех ключей, кроме viz/smooth.
+  const stable = (s) => JSON.stringify({ ...s, bars: undefined });
+  async function openMPage(preview) {
+    errors.length = 0;
+    await page.goto(`http://127.0.0.1:${port}/overlay/motion${preview ? '?preview=1' : ''}`, { waitUntil: 'load' });
+    await page.waitForTimeout(360);
+    fake.player.emit('state', SNAP);
+    await page.waitForTimeout(180);
+  }
+  async function applyMotion(motion) {
+    overlay.command('save', { motion });
+    await page.waitForTimeout(90);
+    // «Показать сейчас» — как кнопка в окне настроек. Страница должна показать текущий трек.
+    overlay.command('preview-motion');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      const ov = document.getElementById('ov');
+      ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+    });
+    await page.waitForTimeout(30);
+  }
+  async function hideDelay(motion, maxMs) {
+    overlay.command('save', { motion });
+    await page.waitForTimeout(80);
+    overlay.command('preview-motion');
+    const t0 = Date.now();
+    for (;;) {
+      const hidden = await page.evaluate(() => document.getElementById('ov').classList.contains('motion-hidden'));
+      if (hidden) return Date.now() - t0;
+      if (Date.now() - t0 > maxMs) return null;
+      await page.waitForTimeout(70);
+    }
+  }
+  async function smoothAvg(smooth) {
+    await applyMotion({ ...BASE, viz: 'spectrum', osc: true, smooth });
+    fake.player.emit('level', 0);
+    fake.player.emit('spectrum', new Array(32).fill(0));
+    await page.waitForTimeout(700);
+    fake.player.emit('level', 1);
+    fake.player.emit('spectrum', new Array(32).fill(1));
+    await page.waitForTimeout(70);
+    const bars = await page.evaluate(() => [...document.querySelectorAll('[data-viz] i')].slice(0, 8)
+      .map((e) => parseFloat(e.style.height) || 0));
+    return bars.reduce((a, x) => a + x, 0) / (bars.length || 1);
+  }
+  for (const preview of [false, true]) {
+    await openMPage(preview);
+    const fail = (key, msg, extra) => {
+      mBad++; mFailures.push({ preview, key, msg, ...extra });
+    };
+    if (errors.length) fail('базовый', 'ошибки страницы', { errs: [...new Set(errors)] });
+    for (const [key, pair, styleOverride] of KEYS) {
+      if (key === 'smooth') {
+        mChecks++;
+        const slow = await smoothAvg('slow');
+        const fast = await smoothAvg('fast');
+        if (!(fast > slow + 5)) fail(key, 'плавность не меняет скорость столбиков', { slow, fast });
+        continue;
+      }
+      const mk = (v) => ({ ...BASE, ...(styleOverride ? { style: styleOverride } : {}), [key]: v });
+      await applyMotion(mk(pair[0]));
+      if (key === 'viz') {
+        fake.player.emit('level', 0.9);
+        fake.player.emit('spectrum', SPECTRUM);
+        await page.waitForTimeout(140);
+      }
+      const a = await SIG();
+      await applyMotion(mk(pair[1]));
+      if (key === 'viz') {
+        fake.player.emit('level', 0.9);
+        fake.player.emit('spectrum', SPECTRUM);
+        await page.waitForTimeout(140);
+      }
+      const b = await SIG();
+      mChecks++;
+      if (errors.length) { fail(key, 'ошибки страницы', { errs: [...new Set(errors)] }); continue; }
+      if (key === 'viz') {
+        // Вид переключается и рисунок другой: лента истории против полос спектра.
+        if (a.views.join() === b.views.join()) fail(key, 'вид визуализатора не переключился', { a: a.views, b: b.views });
+        else if (a.bars.join() === b.bars.join()) fail(key, 'рисунок визуализатора не изменился', { a: a.bars, b: b.bars });
+        continue;
+      }
+      if (stable(a) === stable(b)) fail(key, 'страница не изменилась', { off: a, on: b });
+    }
+    // Длительность показа: hold=3 скрывается раньше, hold=9 — позже 5 с.
+    mChecks += 2;
+    const short = await hideDelay({ ...BASE, hold: 3 }, 5200);
+    if (!(short && short > 2400 && short < 5200)) fail('hold', 'hold=3 не скрывает за ~3 с', { short });
+    const long = await hideDelay({ ...BASE, hold: 9 }, 5200);
+    if (long != null) fail('hold', 'hold=9 скрывает раньше 5 с', { long });
+    console.log('… motion:', preview ? 'превью' : 'OBS', 'проверок', mChecks, 'ошибок', mBad);
+  }
+  console.log(JSON.stringify({ mode: 'motion', checks: mChecks, bad: mBad, keys: KEYS.length + 1, failures: mFailures.slice(0, 30) }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(mBad ? 1 : 0);
 }
 
 for (const p of pages) {
