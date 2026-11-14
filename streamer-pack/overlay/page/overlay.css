@@ -95,6 +95,7 @@ body { font-synthesis: none; }
 
 .mq { animation: ov-mq linear infinite; }
 .mqv { animation: ov-mqv linear infinite; }
+.mq, .mqv { display: inline-block; white-space: pre; }
 @keyframes ov-mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 @keyframes ov-mqv { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 @media (prefers-reduced-motion: reduce) {

@@ -18,7 +18,10 @@
       var l5 = K.h('div', 'code-indent'); l5.append(K.h('span', 'code-key', 'who'), K.h('span', 'code-p', ': '), K.text('who', 'code-who'));
       var l6 = K.h('div', 'code-indent code-vu'); l6.append(K.h('span', 'code-key', 'vu'), K.h('span', 'code-p', ': '), K.viz('sp', 20, { cls: 'code-viz' }));
       var l7 = K.h('div', 'code-indent', 'next: [');
-      body.append(l1, l2, l3, l4, l5, l6, l7, K.queue(), K.h('div', 'code-indent', ']'), K.h('div', 'code-line', '}'));
+      l7.dataset.pl = '1';
+      var end = K.h('div', 'code-indent', ']');
+      end.dataset.pl = '1';
+      body.append(l1, l2, l3, l4, l5, l6, l7, K.queue(), end, K.h('div', 'code-line', '}'));
       root.append(head, body);
     }
   });

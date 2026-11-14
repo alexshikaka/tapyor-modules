@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz;
+  var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz, M = window.TapMotionMath;
   var qs = new URLSearchParams(location.search);
   var PREVIEW = qs.get('preview') === '1';
   var DEMO = qs.get('demo') === '1';
@@ -316,6 +316,7 @@
 
   function resetText(el) {
     if (!el) return;
+    el.textContent = '';
     el.style.width = '';
     el.style.height = '';
     el.style.marginLeft = '';
@@ -332,10 +333,12 @@
 
   function marquee(el, text, horizontal) {
     var gap = '      ';
-    el.textContent = text + gap + text + gap;
-    el.classList.add(horizontal ? 'mq' : 'mqv');
-    var size = horizontal ? el.scrollWidth : el.scrollHeight;
-    el.style.animationDuration = Math.max(6, Math.round(size / 2 / 45)) + 's';
+    var sp = document.createElement('span');
+    sp.className = horizontal ? 'mq' : 'mqv';
+    sp.textContent = text + gap + text + gap;
+    el.appendChild(sp);
+    var size = horizontal ? sp.scrollWidth : sp.scrollHeight;
+    sp.style.animationDuration = Math.max(6, Math.round(size / 2 / 45)) + 's';
   }
 
   function fitVerticalTitle(cfg) {
@@ -381,7 +384,7 @@
     if (need <= 0) return;
     var dir = awayDir(t), free = freeExtra(t, dir), extra = Math.max(0, Math.min(need, free));
     // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
-    if (MOTION && extra > 0) extra = Math.min(free, Math.max(extra, base + 2 * extra));
+    extra = M.reserveExtra(base, extra, MOTION, free);
     if (extra > 0) {
       t.style.flex = '0 0 auto';
       t.style.width = (base + extra) + 'px';
@@ -599,7 +602,9 @@
     var root = S.root; if (!root) return null;
     var R = root.getBoundingClientRect();
     var U = { l: R.left, t: R.top, r: R.right, b: R.bottom };
-    [S.roles.title, S.roles.artist, S.roles.who].forEach(function (el) {
+    [S.roles.cover, S.roles.title, S.roles.artist, S.roles.who].concat(
+      Array.prototype.slice.call(root.querySelectorAll('[data-role="viz"]'))
+    ).forEach(function (el) {
       if (!el || el.hidden || !el.offsetParent) return;
       var r = inkRect(el);
       if (!r.width) return;
@@ -615,9 +620,8 @@
     ov.style.translate = '';
     if (cfg.pos[1] !== 'c') return;
     var b = seenBox(); if (!b) return;
-    var s = scaleNow();
-    var d = ((b.R.left + b.R.right) / 2 - (b.U.l + b.U.r) / 2) / (s || 1);
-    if (Math.abs(d) > 0.5) ov.style.translate = Math.round(d) + 'px 0';
+    var d = M.centerShift(b.R, b.U);
+    if (Math.abs(d) > 0.5) ov.style.translate = d + 'px 0';
   }
 
   function fitPlate() {
@@ -625,10 +629,11 @@
     var pl = S.root.querySelector('.motion-plate'); if (!pl) return;
     var b = seenBox(); if (!b) return;
     var s = scaleNow() || 1, R = b.R, U = b.U;
-    pl.style.top = ((U.t - R.top) / s - 14) + 'px';
-    pl.style.left = ((U.l - R.left) / s - 18) + 'px';
-    pl.style.right = ((R.right - U.r) / s - 18) + 'px';
-    pl.style.bottom = ((R.bottom - U.b) / s - 14) + 'px';
+    var box = M.plateRect(R, U, s);
+    pl.style.top = box.top + 'px';
+    pl.style.left = box.left + 'px';
+    pl.style.right = box.right + 'px';
+    pl.style.bottom = box.bottom + 'px';
   }
 
   function cancelMotion() {
@@ -685,7 +690,7 @@
         anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 520, delay: 80 + i * 70, easing: 'ease-out', fill: 'both' });
       });
     }
-    var hold = Math.max(3, Math.min(15, Number(cfg.hold) || 5));
+    var hold = M.holdSeconds(cfg.hold);
     // Центровка по видимому — после того, как браузер разложил текст и шрифты.
     setTimeout(function () { centerMotion(); fitPlate(); }, 320);
     S.motionTimer = setTimeout(function () {
@@ -761,7 +766,7 @@
     applyConfig(CFG);
     updateCover(currentCfg());
     if (!MOTION) return;
-    var hold = Math.max(3, Math.min(15, Number(CFG.motion.hold) || 5));
+    var hold = M.holdSeconds(CFG.motion.hold);
     var list = TRACK === 'long' ? [DEMO_LONG, DEMO_MEDIUM, DEMO_NORMAL] : TRACK === 'medium' ? [DEMO_MEDIUM, DEMO_NORMAL, DEMO_LONG] : [DEMO_NORMAL, DEMO_MEDIUM, DEMO_LONG];
     S.demoIndex = 0;
     S.trackKey = S.np.title + '|' + S.np.artist;
