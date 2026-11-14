@@ -105,6 +105,26 @@ test('OV3: размер 80–250 у плейлиста и у моушна', () =
   assert.equal(normalize({ motion: { size: 300 } }).motion.size, 250);
 });
 
+test('OV3: моушн хранит свой набор «Что показывать» без ключей очереди', () => {
+  const { normalize, MOTION_DEFAULTS } = require('../src/settings');
+  for (const k of Q) assert.equal(k in MOTION_DEFAULTS, false, 'у моушна не должно быть ' + k);
+  for (const k of ['cover', 'time', 'spin', 'prog', 'osc', 'marq']) assert.equal(MOTION_DEFAULTS[k], true, k);
+  assert.equal(MOTION_DEFAULTS.lang, 'en');
+  assert.equal(MOTION_DEFAULTS.viz, 'wave');
+  assert.equal(MOTION_DEFAULTS.smooth, 'mid');
+  const m = normalize({ motion: {
+    cover: false, time: false, spin: false, prog: false, osc: false, marq: false,
+    lang: 'ru', viz: 'spectrum', smooth: 'slow',
+    count: 5, fade: false, fill: false, nums: false
+  } }).motion;
+  for (const k of ['cover', 'time', 'spin', 'prog', 'osc', 'marq']) assert.equal(m[k], false, k);
+  assert.equal(m.lang, 'ru'); assert.equal(m.viz, 'spectrum'); assert.equal(m.smooth, 'slow');
+  for (const k of Q) assert.equal(k in m, false, 'мусорный ключ очереди не сохраняется: ' + k);
+  const junk = normalize({ motion: { cover: 'да', time: 1, spin: null, prog: 0, osc: 'x', marq: '1', lang: 'de', viz: 'x', smooth: 'zz' } }).motion;
+  for (const k of ['cover', 'time', 'spin', 'prog', 'osc', 'marq']) assert.equal(junk[k], true, k + ': мусор → по умолчанию');
+  assert.equal(junk.lang, 'en'); assert.equal(junk.viz, 'wave'); assert.equal(junk.smooth, 'mid');
+});
+
 test('OV3: особые ключи только там, где элементы реально есть', () => {
   const withKey = (k) => STYLE_DEFS.filter((s) => s.features.includes(k)).map((s) => s.id);
   assert.deepEqual(withKey('spin'), ['dos']);

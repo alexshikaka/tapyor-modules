@@ -18,6 +18,11 @@ test('визуализатор: вверх быстрее, вниз медлен
   let x = 0.2;
   for (let i = 0; i < 200; i++) x = V.next(x, 0.9);
   assert.ok(Math.abs(x - 0.9) < 1e-6);
+  // Плавность из настроек: fast/mid/slow задают общую долю шага.
+  assert.equal(V.next(0, 1, 0.5), 0.5);
+  assert.equal(V.next(0, 1, 0), 0);
+  assert.equal(V.next(0, 1, 1), 1);
+  assert.equal(V.next(0, 1, 2), 1);
 });
 
 test('визуализатор: сегменты и стрелка не выходят за пределы', () => {

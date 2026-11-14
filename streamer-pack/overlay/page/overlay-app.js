@@ -47,8 +47,10 @@
       time: true, osc: true, prog: true, marq: true, lang: 'en', viz: 'wave', smooth: 'mid',
       motion: {
         style: 'dos', pos: 'bc', dx: 0, dy: 0, size: 100,
-        color: '#FFFFFF', vizColor: '#C8F542', outline: true, nick: true,
-        scene: 'brand', hold: 5
+        color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true,
+        scene: 'brand', hold: 5,
+        cover: true, time: true, spin: true, prog: true, osc: true, marq: true,
+        lang: 'en', viz: 'wave', smooth: 'mid'
       }
     };
   }
@@ -72,12 +74,15 @@
   function currentCfg() {
     if (!MOTION) return CFG;
     var m = CFG.motion && typeof CFG.motion === 'object' ? CFG.motion : CFG;
+    // У моушна свои «Что показывать»; ключей очереди у него нет никогда.
     return {
       style: m.style || 'dos', pos: m.pos || 'bc', dx: m.dx || 0, dy: m.dy || 0, size: m.size || 100,
-      color: m.color || '#FFFFFF', vizColor: m.vizColor || '#C8F542', outline: m.outline !== false,
-      nick: m.nick !== false, count: 0, fade: false, fadePct: 0, nums: false, cover: true,
-      time: true, osc: true, prog: true, marq: true, lang: CFG.lang || 'en', viz: CFG.viz || 'wave',
-      smooth: CFG.smooth || 'mid', scene: m.scene || 'brand', hold: m.hold || 5
+      color: m.color || '#FFB000', vizColor: m.vizColor || '#FFB000', outline: m.outline !== false,
+      nick: m.nick !== false, count: 0, fade: false, fadePct: 0, nums: false,
+      cover: m.cover !== false, time: m.time !== false, spin: m.spin !== false,
+      osc: m.osc !== false, prog: m.prog !== false, marq: m.marq !== false,
+      lang: m.lang === 'ru' ? 'ru' : m.lang === 'en' ? 'en' : '', viz: m.viz === 'spectrum' ? 'spectrum' : 'wave',
+      smooth: m.smooth || 'mid', scene: m.scene || 'brand', hold: m.hold || 5
     };
   }
 
@@ -111,7 +116,15 @@
   function applyConfig(raw) {
     var c = raw && typeof raw === 'object' ? raw : CFG;
     if (MOTION && (!c.motion || typeof c.motion !== 'object')) {
-      c = Object.assign({}, c, { motion: { style: c.style, pos: 'bc', color: c.color, vizColor: c.vizColor, scene: 'brand', hold: 5 } });
+      var dm = pageDefaults().motion;
+      c = Object.assign({}, c, {
+        motion: Object.assign({}, dm, {
+          style: c.style || dm.style,
+          pos: /^[tb][lcr]$/.test(c.pos) ? c.pos : dm.pos,
+          color: c.color || dm.color,
+          vizColor: c.vizColor || c.color || dm.vizColor
+        })
+      });
     }
     CFG = c;
     ov.hidden = false;
@@ -531,6 +544,9 @@
       if (now - S.vizPausedAt > 2600) return;
     } else S.vizPausedAt = 0;
     var lv = paused ? 0 : levelNow(now);
+    var alpha = D.smoothAlpha(cfg.smooth);
+    // DOS-лента умеет переключаться «волна/спектр»; остальные стили рисуют свой вид всегда.
+    var specMode = cfg.style === 'dos' && cfg.viz === 'spectrum';
     S.root.querySelectorAll('[data-viz]').forEach(function (z) {
       if (z.closest('[hidden]')) return;
       var st = getViz(z), kind = z.dataset.viz, n = Number(z.dataset.cols) || z.children.length;
@@ -539,12 +555,16 @@
         for (var i = 0; i < n; i++) {
           var t = paused ? 0 : specAt(i, n, now, liveSpec);
           var cur = st.shown[i] || 0;
-          st.shown[i] = V.next(cur, t);
+          st.shown[i] = V.next(cur, t, alpha);
         }
       } else if (kind === 'sp') {
         if (!paused && (!st.last || now - st.last > 170)) {
           st.last = now;
-          V.historyPush(st.hist, lv, 0.05);
+          if (specMode && liveSpec) {
+            for (var q = 0; q < n; q++) st.hist[q] = V.next(st.hist[q] || 0, interp(S.spec, q, n), alpha);
+          } else {
+            V.historyPush(st.hist, lv, 0.05);
+          }
         }
         if (paused) for (var h = 0; h < n; h++) st.hist[h] *= 0.82;
       }
@@ -570,7 +590,8 @@
         for (var p = 0; p < z.children.length; p++) z.children[p].style.height = Math.max(3, (st.hist[p] || 0) * 100) + '%';
       } else if (kind === 'nd') {
         var nd = z.querySelector('.needle');
-        var angle = V.needleAngle(target);
+        st.shown[0] = V.next(st.shown[0] || 0, target, alpha);
+        var angle = V.needleAngle(st.shown[0]);
         if (nd) nd.style.transform = 'rotate(' + angle.toFixed(2) + 'deg)';
       } else if (kind === 'w') {
         drawWave(z, st, paused, now, liveSpec);

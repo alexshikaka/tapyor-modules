@@ -13,9 +13,10 @@
     return (Number(arr[a]) || 0) * (1 - f) + (Number(arr[b]) || 0) * f;
   }
 
-  // Подтяжка к цели: вверх быстро, вниз медленно.
-  function next(cur, target) {
+  // Подтяжка к цели: вверх быстро, вниз медленно. rate (0…1) — общая плавность из настроек.
+  function next(cur, target, rate) {
     cur = Number(cur) || 0; target = Number(target) || 0;
+    if (typeof rate === 'number' && isFinite(rate)) return cur + (target - cur) * clamp(rate, 0, 1);
     return cur + (target - cur) * (target > cur ? 0.62 : 0.18);
   }
 

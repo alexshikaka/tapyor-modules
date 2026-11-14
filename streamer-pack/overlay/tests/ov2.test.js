@@ -91,26 +91,39 @@ test('OV2: команда styles отдаёт цвета вместе с ост�
 test('OV2: save сливает motion глубоко и не сбрасывает остальные поля моушна', () => {
   const core = fakeCore(); const o = new Overlay(core); o.start();
   const full = o.command('save', {
-    motion: { style: 'card', pos: 'tl', dx: 12, dy: -8, size: 120, color: '#33ff66', vizColor: '#0f8', outline: false, nick: false, scene: 'brand', hold: 9 }
+    motion: {
+      style: 'card', pos: 'tl', dx: 12, dy: -8, size: 220, color: '#33ff66', vizColor: '#0f8',
+      outline: false, nick: false, scene: 'brand', hold: 9,
+      cover: false, time: false, spin: false, prog: false, osc: false, marq: false,
+      lang: 'ru', viz: 'spectrum', smooth: 'slow'
+    }
   });
   assert.equal(full.motion.style, 'card'); assert.equal(full.motion.hold, 9);
+  assert.equal(full.motion.size, 220);
   const patch = o.command('save', { motion: { scene: 'mask' } });
   assert.equal(patch.motion.scene, 'mask');
   assert.equal(patch.motion.style, 'card');
   assert.equal(patch.motion.pos, 'tl');
   assert.equal(patch.motion.dx, 12);
   assert.equal(patch.motion.dy, -8);
-  assert.equal(patch.motion.size, 120);
+  assert.equal(patch.motion.size, 220);
   assert.equal(patch.motion.color, '#33FF66');
   assert.equal(patch.motion.vizColor, '#00FF88');
   assert.equal(patch.motion.outline, false);
   assert.equal(patch.motion.nick, false);
   assert.equal(patch.motion.hold, 9);
+  // Свой набор «Что показывать» переживает частичный save.
+  for (const k of ['cover', 'time', 'spin', 'prog', 'osc', 'marq']) assert.equal(patch.motion[k], false, k);
+  assert.equal(patch.motion.lang, 'ru');
+  assert.equal(patch.motion.viz, 'spectrum');
+  assert.equal(patch.motion.smooth, 'slow');
   assert.equal(core.store.overlay.motion.scene, 'mask');
   // Мусор в частичном патче тоже не сбрасывает остальное.
   const junk = o.command('save', { motion: { hold: 999 } });
   assert.equal(junk.motion.hold, 15);
   assert.equal(junk.motion.style, 'card');
+  assert.equal(junk.motion.cover, false);
+  assert.equal(junk.motion.lang, 'ru');
 });
 
 test('OV2: preview-motion шлёт «показать сейчас» открытым моушн-страницам', () => {

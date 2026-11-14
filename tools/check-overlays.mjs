@@ -215,8 +215,9 @@ const measured = await page.addInitScript(() => {
       style: root.dataset.style, visible, labels, queueRows: rows.length,
       first: rows[0] ? rows[0].textContent : '', second: secondOpacity,
       title: title ? title.textContent : '', artist: artist ? artist.textContent : '', who: who ? who.textContent : '',
+      // Кадр вертушки DOS крутится, его рамка не должна влиять на сравнение «ничего не изменилось».
       boxes: [box(root), box(root.querySelector('[data-role="cover"]')), box(title), box(artist), box(who), box(time),
-        box(root.querySelector('[data-role="prog"]')), box(root.querySelector('[data-role="spin"]')), ...viz.map(box)]
+        box(root.querySelector('[data-role="prog"]')), ...viz.map(box)]
     });
     return {
       visible, labels, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
@@ -292,7 +293,61 @@ if (featuresMode) {
     }
     if (styles.indexOf(style) % 5 === 0) console.log('… features:', style, 'ошибок', featureBad);
   }
-  console.log(JSON.stringify({ mode: 'features', total: featureTotal, bad: featureBad, failures: featureFailures.slice(0, 40) }, null, 2));
+  // Моушн: свой набор «Что показывать», очередь к нему не относится.
+  const MOTION_SHOW = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang'];
+  const QUEUE_KEYS = ['count', 'fade', 'fill', 'nums'];
+  let motionTotal = 0;
+  async function openMotion(style, feat) {
+    errors.length = 0;
+    const suffix = feat ? '&feat=' + encodeURIComponent(feat) : '';
+    const url = `http://127.0.0.1:${port}/overlay/motion?demo=1&style=${encodeURIComponent(style)}`
+      + `&pos=tc&nick=1&track=long&paused=1${suffix}`;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForTimeout(240);
+    // Показ по таймеру не ждём: снимаем класс видимости и завершаем анимации (без правок страницы).
+    await page.evaluate(() => {
+      const ov = document.getElementById('ov');
+      if (!ov) return;
+      ov.classList.remove('motion-hidden');
+      ov.style.visibility = 'visible';
+      ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+    });
+    await page.waitForTimeout(60);
+    return { r: await page.evaluate(() => window.__ovFeature()), errs: [...new Set(errors)] };
+  }
+  for (const style of styles) {
+    const def = STYLE_DEFS.find((s) => s.id === style);
+    if (!def) continue;
+    const declared = def.features.filter((k) => MOTION_SHOW.includes(k));
+    const base = await openMotion(style, '');
+    motionTotal++;
+    if (base.errs.length) {
+      featureBad++; featureFailures.push({ page: 'motion', style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
+    }
+    for (const key of [...MOTION_SHOW, ...QUEUE_KEYS]) {
+      const off = await openMotion(style, key + ':0');
+      const on = await openMotion(style, key + ':' + (key === 'lang' ? 'en' : '1'));
+      motionTotal += 2;
+      const fail = (msg, extra) => { featureBad++; featureFailures.push({ page: 'motion', style, key, msg, ...extra }); };
+      if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
+      if (QUEUE_KEYS.includes(key) || !declared.includes(key)) {
+        if (off.r.sig !== base.r.sig || on.r.sig !== base.r.sig) fail('ключ не из набора моушна изменил вид');
+        continue;
+      }
+      if (key === 'lang') {
+        if (labelText(off.r.labels) || !labelText(on.r.labels)) fail('подписи не переключаются', { off: off.r.labels, on: on.r.labels });
+        continue;
+      }
+      if (!off.r.visible[key] && on.r.visible[key]) continue;
+      fail('элемент не переключается', { off: off.r.visible[key], on: on.r.visible[key], titleInfo: on.r.titleInfo });
+    }
+    if (styles.indexOf(style) % 5 === 0) console.log('… features motion:', style, 'ошибок', featureBad);
+  }
+  featureTotal += motionTotal;
+  console.log(JSON.stringify({
+    mode: 'features', total: featureTotal, playlist: featureTotal - motionTotal, motion: motionTotal,
+    bad: featureBad, failures: featureFailures.slice(0, 40)
+  }, null, 2));
   await browser.close();
   server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
