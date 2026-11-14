@@ -26,7 +26,8 @@ const PAGE_FILES = {
   '/overlay-app.js': ['overlay-app.js', 'text/javascript; charset=utf-8'],
   '/style-kit.js': ['style-kit.js', 'text/javascript; charset=utf-8'],
   '/dos.js': ['dos.js', 'text/javascript; charset=utf-8'],
-  '/colors.js': ['colors.js', 'text/javascript; charset=utf-8']
+  '/colors.js': ['colors.js', 'text/javascript; charset=utf-8'],
+  '/viz.js': ['viz.js', 'text/javascript; charset=utf-8']
 };
 for (const s of STYLE_DEFS) {
   PAGE_FILES['/styles/' + s.id + '.js'] = ['styles/' + s.id + '.js', 'text/javascript; charset=utf-8'];

@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var K = window.TapKit, D = window.TapDos, C = window.TapColors;
+  var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz;
   var qs = new URLSearchParams(location.search);
   var PREVIEW = qs.get('preview') === '1';
   var DEMO = qs.get('demo') === '1';
@@ -467,12 +467,7 @@
     }
     return st;
   }
-  function interp(arr, i, n) {
-    if (!arr || !arr.length) return 0;
-    var x = n <= 1 ? 0 : i * (arr.length - 1) / (n - 1);
-    var a = Math.floor(x), b = Math.min(arr.length - 1, a + 1), f = x - a;
-    return (arr[a] || 0) * (1 - f) + (arr[b] || 0) * f;
-  }
+  function interp(arr, i, n) { return V.interp(arr, i, n); }
   function simulated(now, i) {
     return 0.18 + 0.82 * Math.abs(Math.sin(now / 360 + i * 0.55) * Math.cos(now / 610 + i * 0.17));
   }
@@ -505,13 +500,12 @@
         for (var i = 0; i < n; i++) {
           var t = paused ? 0 : specAt(i, n, now, liveSpec);
           var cur = st.shown[i] || 0;
-          var k = t > cur ? 0.62 : 0.18;
-          st.shown[i] = cur + (t - cur) * k;
+          st.shown[i] = V.next(cur, t);
         }
       } else if (kind === 'sp') {
         if (!paused && (!st.last || now - st.last > 170)) {
           st.last = now;
-          st.hist.shift(); st.hist.push(Math.max(0.05, lv));
+          V.historyPush(st.hist, lv, 0.05);
         }
         if (paused) for (var h = 0; h < n; h++) st.hist[h] *= 0.82;
       }
@@ -525,7 +519,7 @@
       } else if (kind === 'g') {
         var rows = Number(z.dataset.rows) || 4;
         for (var c = 0; c < z.children.length; c++) {
-          var lit = Math.round((st.shown[c] || 0) * rows);
+          var lit = V.lit(st.shown[c] || 0, rows);
           for (var r = 0; r < rows; r++) z.children[c].children[r].classList.toggle('on', r < lit);
         }
       } else if (kind === 'r') {
@@ -537,7 +531,7 @@
         for (var p = 0; p < z.children.length; p++) z.children[p].style.height = Math.max(3, (st.hist[p] || 0) * 100) + '%';
       } else if (kind === 'nd') {
         var nd = z.querySelector('.needle');
-        var angle = -55 + 110 * Math.max(0, Math.min(1, target));
+        var angle = V.needleAngle(target);
         if (nd) nd.style.transform = 'rotate(' + angle.toFixed(2) + 'deg)';
       } else if (kind === 'w') {
         drawWave(z, st, paused, now, liveSpec);
@@ -554,7 +548,7 @@
     g.beginPath();
     for (var i = 0; i <= pts; i++) {
       var v = paused ? 0 : specAt(i, pts + 1, now, live);
-      var y = H * (0.92 - 0.82 * Math.max(0, Math.min(1, v)) * Math.sin(i / pts * Math.PI));
+      var y = V.waveY(v, i, pts, H);
       var x = i * W / pts;
       if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
     }
