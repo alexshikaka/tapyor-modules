@@ -281,6 +281,9 @@ const measured = await page.addInitScript(() => {
     if (!root || !ov) return { error: 'нет .style-root' };
     const h = ov.dataset.h || 'r';
     const style = root.dataset.style;
+    // OV6: DOS, 8-бит HUD, Код и Радар в правых углах не зеркалят ленту и шкалу:
+    // их край проверяем как у левого положения, текст — как обычно.
+    const vizH = (style === 'dos' || style === 'hud8' || style === 'code' || style === 'radar') && h === 'r' ? 'l' : h;
     const EPS = 2.5;
     const vis = (el) => {
       if (!el || el.hidden || !el.offsetParent) return false;
@@ -319,18 +322,20 @@ const measured = await page.addInitScript(() => {
       }
       return ink(el);
     };
-    const target = (c) => (h === 'r' ? c.r : h === 'l' ? c.l : c.mid);
-    const got = (ir) => (h === 'r' ? ir.r : h === 'l' ? ir.l : ir.mid);
-    const entry = (role, c, ir, extra) => {
-      const e = target(c), g = got(ir);
+    const target = (c, dir) => ((dir || h) === 'r' ? c.r : (dir || h) === 'l' ? c.l : c.mid);
+    const got = (ir, dir) => ((dir || h) === 'r' ? ir.r : (dir || h) === 'l' ? ir.l : ir.mid);
+    const entry = (role, c, ir, extra, dir) => {
+      const e = target(c, dir), g = got(ir, dir);
       return Object.assign({ role, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= EPS }, extra || {});
     };
+    // №18 «Код»: ни одна строка не перевёрнута, текст прижат влево. Визуализатор и шкалу
+    // всё равно проверяем ниже (у него своё исключение по vizH).
+    let code = null;
     if (style === 'code') {
-      // Исключение: ни одна строка не перевёрнута, текст прижат влево.
       const ta = getComputedStyle(root).textAlign;
       const head = root.querySelector('.code-head');
       const dir = head ? getComputedStyle(head).flexDirection : '';
-      return { style, h, code: { textAlign: ta, headDirection: dir, ok: ta === 'left' && dir !== 'row-reverse' }, texts: [], queue: null, viz: [], prog: null };
+      code = { textAlign: ta, headDirection: dir, ok: ta === 'left' && dir !== 'row-reverse' };
     }
     const texts = [];
     // №13/№22/№27: исполнитель и время — одна строка, проверяем её край целиком.
@@ -342,7 +347,8 @@ const measured = await page.addInitScript(() => {
       && /(^|\s)meta-line(\s|$)/.test(artistEl.parentElement.className)) {
       pair.add('artist').add('time');
     }
-    for (const role of ['title', 'artist', 'who', 'time']) {
+    // №18 «Код» проверяется отдельно (code.ok), у него строки не переворачиваются.
+    for (const role of (style === 'code' ? [] : ['title', 'artist', 'who', 'time'])) {
       const el = root.querySelector('[data-role="' + role + '"]');
       if (!vis(el)) continue;
       if (el.querySelector('.mq, .mqv')) continue;   // бегущая строка: край гуляет по замыслу
@@ -394,13 +400,15 @@ const measured = await page.addInitScript(() => {
     const q = root.querySelector('[data-role="queue"]');
     if (vis(q) && q.children.length) {
       const c = content(q);
+      // №18 «Код» в любом углу: строки очереди не переворачиваются, прижаты влево.
+      const qh = style === 'code' ? 'l' : h;
       const rows = [...q.children].filter(vis);
       const horizontal = /row/.test(getComputedStyle(q).flexDirection);
       if (horizontal) {
         const rs = rows.map((r) => r.getBoundingClientRect());
         const u = { l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)) };
         u.mid = (u.l + u.r) / 2;
-        queue = entry('queue', c, u, { horizontal: true, rows: rows.length });
+        queue = entry('queue', c, u, { horizontal: true, rows: rows.length }, qh);
       } else {
         const list = rows.map((r, i) => {
           const ir0 = textRect(r);
@@ -409,7 +417,7 @@ const measured = await page.addInitScript(() => {
           const rb = r.getBoundingClientRect();
           const ir = ir0 ? { l: Math.max(ir0.l, rb.left), r: Math.min(ir0.r, rb.right) } : null;
           if (ir) ir.mid = (ir.l + ir.r) / 2;
-          return ir && ir.r > ir.l ? Object.assign(entry('queue' + (i + 1), c, ir), { text: r.textContent.slice(0, 40) }) : null;
+          return ir && ir.r > ir.l ? Object.assign(entry('queue' + (i + 1), c, ir, null, qh), { text: r.textContent.slice(0, 40) }) : null;
         }).filter(Boolean);
         queue = { rows: list.length, bad: list.filter((x) => !x.ok).length, list: list.filter((x) => !x.ok).slice(0, 4) };
       }
@@ -428,21 +436,21 @@ const measured = await page.addInitScript(() => {
           // Стрелки VU — у дальнего края: справа это левый край, слева — правый.
           const r = box.getBoundingClientRect();
           const rr = root.getBoundingClientRect();
-          const e = h === 'r' ? rr.left : h === 'l' ? rr.right : null;
+          const e = vizH === 'r' ? rr.left : vizH === 'l' ? rr.right : null;
           if (e == null) continue;
-          const g = h === 'r' ? r.left : r.right;
+          const g = vizH === 'r' ? r.left : r.right;
           viz.push({ kind, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= 3, far: true });
           continue;
         }
         if (kind === 'w') continue;   // волна занимает всю ширину
         // Столбики и лента на всю ширину: по центру у них нет своего края,
         // центрируется сама коробка оверлея.
-        if (h === 'c' && (kind === 'b' || kind === 'sp' || kind === 'g')) continue;
+        if (vizH === 'c' && (kind === 'b' || kind === 'sp' || kind === 'g')) continue;
         const check = kind === 'bw' ? kids : [kids[0]];
         for (const k of check) {
           const r = k.getBoundingClientRect();
           const ir = { l: r.left, r: r.right, mid: (r.left + r.right) / 2 };
-          viz.push(Object.assign(entry(kind, c, ir), { kind }));
+          viz.push(Object.assign(entry(kind, c, ir, { kind }, vizH), { kind }));
           if (kind !== 'bw') break;
         }
       }
@@ -450,14 +458,14 @@ const measured = await page.addInitScript(() => {
     // Шкала прогресса: ячейки заполняются от края.
     let prog = null;
     const p = root.querySelector('[data-role="prog"]');
-    if (vis(p) && p.children.length && h !== 'c') {
+    if (vis(p) && p.children.length && vizH !== 'c') {
       const r = p.children[0].getBoundingClientRect();
-      prog = entry('prog', content(p), { l: r.left, r: r.right, mid: (r.left + r.right) / 2 });
+      prog = entry('prog', content(p), { l: r.left, r: r.right, mid: (r.left + r.right) / 2 }, null, vizH);
     }
-    const bad = texts.filter((x) => !x.ok).length
+    const bad = (code && !code.ok ? 1 : 0) + texts.filter((x) => !x.ok).length
       + (queue ? (queue.horizontal || queue.bad == null ? (queue.ok ? 0 : 1) : queue.bad) : 0)
       + viz.filter((x) => !x.ok).length + (prog && !prog.ok ? 1 : 0);
-    return { style, h, bad, texts, queue, viz, prog };
+    return { style, h, vizH, code, bad, texts, queue, viz, prog };
   };
   // Режим --queue: каждая строка очереди — начало (номер, название) видно,
   // лишний конец обрезан (многоточием), домашний край строки — у края колонки.
@@ -858,18 +866,19 @@ if (alignMode) {
         combos++;
         if (r.error) { badCombos++; alignFailures.push({ p, style, pos, msg: r.error }); continue; }
         if (errors.length) { badCombos++; alignFailures.push({ p, style, pos, errors: [...new Set(errors)] }); continue; }
-        if (r.code) {
-          checks++;
-          if (!r.code.ok) { badCombos++; alignFailures.push({ p, style, pos, code: r.code }); }
-          continue;
-        }
+        const codeBad = !!(r.code && !r.code.ok);
         const textBad = r.texts.filter((x) => !x.ok);
         const vizBad = r.viz.filter((x) => !x.ok);
         const qBad = r.queue ? addBad(r.queue) : 0;
-        checks += r.texts.length + (r.queue ? (r.queue.horizontal ? 1 : r.queue.rows) : 0) + r.viz.length + (r.prog ? 1 : 0);
-        if (textBad.length || vizBad.length || qBad || (r.prog && !r.prog.ok)) {
+        checks += (r.code ? 1 : 0) + r.texts.length
+          + (r.queue ? (r.queue.horizontal ? 1 : r.queue.rows) : 0) + r.viz.length + (r.prog ? 1 : 0);
+        if (codeBad || textBad.length || vizBad.length || qBad || (r.prog && !r.prog.ok)) {
           badCombos++;
-          alignFailures.push({ p, style, pos, h: r.h, texts: textBad, queue: r.queue && (r.queue.horizontal ? (r.queue.ok ? null : r.queue) : r.queue.list), viz: vizBad, prog: r.prog && !r.prog.ok ? r.prog : null });
+          alignFailures.push({
+            p, style, pos, h: r.h, vizH: r.vizH, code: codeBad ? r.code : null, texts: textBad,
+            queue: r.queue && (r.queue.horizontal ? (r.queue.ok ? null : r.queue) : r.queue.list),
+            viz: vizBad, prog: r.prog && !r.prog.ok ? r.prog : null
+          });
         }
         if (combos % 60 === 0) console.log('… align:', combos, 'сочетаний, плохих', badCombos);
       }
