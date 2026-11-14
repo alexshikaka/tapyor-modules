@@ -4,14 +4,15 @@
   'use strict';
 
   var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz, M = window.TapMotionMath;
-  var qs = new URLSearchParams(location.search);
-  var PREVIEW = qs.get('preview') === '1';
-  var DEMO = qs.get('demo') === '1';
-  var LONG = qs.get('long') === '1';
-  var TRACK = qs.get('track') || (LONG ? 'long' : 'normal');
-  var FORCE_STYLE = qs.get('style') || '';
-  var FORCE_POS = qs.get('pos') || '';
-  var FORCE_NICK = qs.get('nick');
+  var DEMO_LIB = window.TapDemo;
+  var DOPT = DEMO_LIB.options(location.search);
+  var PREVIEW = DOPT.preview;
+  var DEMO = DOPT.demo;
+  var DEMO_PAUSED = DOPT.paused;
+  var TRACK = DOPT.track;
+  var FORCE_STYLE = DOPT.style;
+  var FORCE_POS = DOPT.pos;
+  var FORCE_NICK = DOPT.nick;
   var MOTION = false;
 
   var ov = document.getElementById('ov');
@@ -41,20 +42,7 @@
     demoIndex: 0, pausedLast: null, vizPausedAt: 0
   };
 
-  var DEMO_NORMAL = { title: 'Группа крови', artist: 'Кино', who: 'dimon_play', pos: 92, dur: 243, playing: true, at: Date.now() };
-  var DEMO_LONG = {
-    title: "Set My Heart On Fire (I'm Alive x And The Beat Goes On) [Majestic VIP Mix]",
-    artist: 'Majestic, The Jammin Kid & Céline Dion', who: 'очень_длинный_ник_зрителя',
-    pos: 92, dur: 243, playing: true, at: Date.now()
-  };
-  var DEMO_MEDIUM = { title: 'Звезда по имени Солнце', artist: 'Кино', who: 'kot_v_sapogah', pos: 92, dur: 243, playing: true, at: Date.now() };
-  var DEMO_QUEUE = [
-    { title: 'Хочешь?', artist: 'Земфира', who: 'lera_k' },
-    { title: 'Выхода нет', artist: 'Сплин', who: 'nastya_s' },
-    { title: 'Владивосток 2000', artist: 'Мумий Тролль', who: 'kot_v_sapogah' },
-    { title: 'Instant Crush', artist: 'Daft Punk' },
-    { title: 'Dreams', artist: 'Fleetwood Mac', who: 'dimon_play' }
-  ];
+  var DEMO_QUEUE = DEMO_LIB.queue();
 
   function palette(id) {
     var d = DEFS[id] || DEFS.dos;
@@ -755,9 +743,7 @@
 
   // ---------- демо ----------
   function demoNp() {
-    var base = TRACK === 'long' ? DEMO_LONG : TRACK === 'medium' ? DEMO_MEDIUM : DEMO_NORMAL;
-    var p = (92 + (Date.now() - S.demoAt) / 1000) % 243;
-    return Object.assign({}, base, { pos: p, at: Date.now() });
+    return DEMO_LIB.np(TRACK, S.demoAt, DEMO_PAUSED, Date.now());
   }
 
   function startDemo() {
@@ -767,7 +753,7 @@
     updateCover(currentCfg());
     if (!MOTION) return;
     var hold = M.holdSeconds(CFG.motion.hold);
-    var list = TRACK === 'long' ? [DEMO_LONG, DEMO_MEDIUM, DEMO_NORMAL] : TRACK === 'medium' ? [DEMO_MEDIUM, DEMO_NORMAL, DEMO_LONG] : [DEMO_NORMAL, DEMO_MEDIUM, DEMO_LONG];
+    var list = DEMO_LIB.list(TRACK);
     S.demoIndex = 0;
     S.trackKey = S.np.title + '|' + S.np.artist;
     S.firstTrack = false;

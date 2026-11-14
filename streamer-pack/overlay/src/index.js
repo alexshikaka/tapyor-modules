@@ -28,7 +28,8 @@ const PAGE_FILES = {
   '/dos.js': ['dos.js', 'text/javascript; charset=utf-8'],
   '/colors.js': ['colors.js', 'text/javascript; charset=utf-8'],
   '/viz.js': ['viz.js', 'text/javascript; charset=utf-8'],
-  '/motion-math.js': ['motion-math.js', 'text/javascript; charset=utf-8']
+  '/motion-math.js': ['motion-math.js', 'text/javascript; charset=utf-8'],
+  '/demo.js': ['demo.js', 'text/javascript; charset=utf-8']
 };
 for (const s of STYLE_DEFS) {
   PAGE_FILES['/styles/' + s.id + '.js'] = ['styles/' + s.id + '.js', 'text/javascript; charset=utf-8'];
