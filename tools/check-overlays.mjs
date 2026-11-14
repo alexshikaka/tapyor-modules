@@ -335,8 +335,8 @@ const measured = await page.addInitScript(() => {
     const timeEl = root.querySelector('[data-role="time"]');
     const pair = new Set();
     if (artistEl && timeEl && artistEl.nextElementSibling === timeEl
-      && getComputedStyle(artistEl).display.indexOf('inline') === 0
-      && getComputedStyle(timeEl).display.indexOf('inline') === 0) {
+      && artistEl.parentElement === timeEl.parentElement
+      && /(^|\s)meta-line(\s|$)/.test(artistEl.parentElement.className)) {
       pair.add('artist').add('time');
     }
     for (const role of ['title', 'artist', 'who', 'time']) {
@@ -747,10 +747,10 @@ if (shiftMode) {
   };
   let total = 0, bad = 0, pageErrors = 0, clipBad = 0;
   const failures = [];
-  async function loadShift(style, pos, p, dx, dy, size) {
+  async function openShift(style, pos, p) {
     errors.length = 0;
     const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${encodeURIComponent(style)}`
-      + `&pos=${pos}&nick=1&track=${shiftTrack}&dx=${dx}&dy=${dy}&size=${size}`;
+      + `&pos=${pos}&nick=1&track=${shiftTrack}&dx=0&dy=0&size=100`;
     await page.goto(url, { waitUntil: 'load' });
     await page.evaluate(async () => { if (document.fonts && document.fonts.ready) await document.fonts.ready; });
     await page.waitForTimeout(p === 'motion' ? 300 : 120);
@@ -766,10 +766,22 @@ if (shiftMode) {
     }
     return { r: await page.evaluate(() => window.__ovLayout()), errs: [...new Set(errors)] };
   }
+  // Сдвиг/размер меняются на уже открытой странице (демо-хук), без перезагрузки:
+  // тот же путь applyConfig/boxStyle/раскладки, что и после сохранения настроек.
+  async function applyShift(dx, dy, size) {
+    errors.length = 0;
+    const ok = await page.evaluate((o) => {
+      if (!window.TapDemoSet) return false;
+      window.TapDemoSet(o);
+      return true;
+    }, { dx, dy, size });
+    await page.waitForTimeout(45);
+    return { ok, r: await page.evaluate(() => window.__ovLayout()), errs: [...new Set(errors)] };
+  }
   for (const p of pages) {
     for (const style of styles) {
       for (const pos of positions) {
-        const ref = await loadShift(style, pos, p, 0, 0, 100);
+        const ref = await openShift(style, pos, p);
         if (ref.r.error || ref.errs.length) {
           total++; bad++; pageErrors += ref.errs.length;
           failures.push({ p, style, pos, variant: 'ref', msg: ref.r.error, errs: ref.errs });
@@ -778,11 +790,11 @@ if (shiftMode) {
         for (const [dx, dy] of shifts) {
           for (const size of sizes) {
             if (dx === 0 && dy === 0 && size === 100) continue;
-            const cur = await loadShift(style, pos, p, dx, dy, size);
+            const cur = await applyShift(dx, dy, size);
             total++;
-            if (cur.r.error || cur.errs.length) {
+            if (!cur.ok || cur.r.error || cur.errs.length) {
               bad++; pageErrors += cur.errs.length;
-              failures.push({ p, style, pos, dx, dy, size, msg: cur.r.error, errs: cur.errs });
+              failures.push({ p, style, pos, dx, dy, size, msg: cur.ok ? cur.r.error : 'нет демо-хука', errs: cur.errs });
               continue;
             }
             const d = [];
@@ -916,7 +928,7 @@ async function makeGrid(shotsMap) {
   fs.writeFileSync(path.join(shotsDir, '_grid-playlist.png'), Buffer.from(dataUrl.split(',')[1], 'base64'));
   await gp.close();
 }
-if (shots) await makeGrid(gridShots);
+if (shots && gridShots.size > 5) await makeGrid(gridShots);
 
 const fonts = [...fontsByStyle].map(([style, f]) => ({ style, ...f }));
 const expected = new Map(STYLE_DEFS.map((s) => [s.id, s.font]));
