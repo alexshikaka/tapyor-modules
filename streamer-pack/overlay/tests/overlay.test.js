@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { normalize, DEFAULTS } = require('../src/settings');
 const { buildFeed, nextList, coverFor, cleanSnap } = require('../src/feed');
-const { Overlay, PAGE_FILES } = require('../src/index');
+const { Overlay, PAGE_FILES, FONT_FILES } = require('../src/index');
 const D = require('../page/dos');
 
 // ---------- поддельное ядро ----------
@@ -34,6 +34,14 @@ function fakeRes() {
   return { head: null, chunks: [], ended: false, writeHead(c, h) { this.head = { c, h }; }, write(x) { this.chunks.push(x); return true; }, end(x) { if (x) this.chunks.push(String(x)); this.ended = true; } };
 }
 function fakeReq() { const r = new EventEmitter(); r.method = 'GET'; return r; }
+function request(core, sub) {
+  return new Promise((resolve) => {
+    const res = fakeRes();
+    const end = res.end.bind(res);
+    res.end = (x) => { end(x); resolve(res); };
+    core.mounts['/overlay'](fakeReq(), res, sub, new URLSearchParams());
+  });
+}
 const SNAP = {
   np: { title: 'Группа крови', artist: 'Кино', cover: 'https://avatars.example/c.jpg', pos: 92, dur: 243, playing: true, at: 1000 },
   next: [{ title: 'Хочешь?', artist: 'Земфира' }, { title: 'Midnight City', artist: 'M83' }],
@@ -222,6 +230,31 @@ test('модуль: на старом ядре без моста — понят�
   const core = fakeCore(); delete core.http;
   assert.throws(() => new Overlay(core).start(), /нужен Тапёр новее/);
 });
+test('шрифты пака: css и woff2 отдаются, чужие пути — 404', async () => {
+  const core = fakeCore(); const o = new Overlay(core); o.start();
+
+  const css = await request(core, '/pack-fonts.css');
+  assert.equal(css.head.c, 200); assert.match(css.head.h['Content-Type'], /^text\/css/);
+  assert.match(css.chunks.join(''), /@font-face/);
+
+  const name = 'oswald-700-cyrillic.woff2';
+  assert.ok(FONT_FILES.includes(name));
+  const font = await request(core, '/fonts/' + name);
+  assert.equal(font.head.c, 200); assert.equal(font.head.h['Content-Type'], 'font/woff2');
+  assert.ok(font.chunks[0].length > 1000);
+
+  for (const sub of ['/fonts/../index.js', '/fonts/unknown.woff2', '/fonts.css', '/fonts/OSWALD-700-CYRILLIC.woff2']) {
+    const no = await request(core, sub);
+    assert.equal(no.head.c, 404, sub);
+  }
+  await o.stop();
+});
 test('страница отдаёт только свои файлы', () => {
-  assert.deepEqual(Object.keys(PAGE_FILES).sort(), ['/dos.js', '/playlist', '/playlist.css', '/playlist.js']);
+  const keys = Object.keys(PAGE_FILES);
+  for (const k of ['/dos.js', '/playlist', '/playlist.css', '/playlist.js', '/pack-fonts.css']) assert.ok(keys.includes(k));
+  for (const name of FONT_FILES) assert.ok(keys.includes('/fonts/' + name));
+  for (const name of FONT_FILES) assert.match(name, /^[a-z0-9-]+\.woff2$/);
+  assert.equal(keys.length, 5 + FONT_FILES.length);
+  assert.equal(keys.includes('/fonts.css'), false);
+  assert.equal(keys.includes('/fonts/../index.js'), false);
 });

@@ -9,13 +9,26 @@ const { normalize, DEFAULTS } = require('./settings');
 const { buildFeed, cleanSnap } = require('./feed');
 
 const PAGE_DIR = path.join(__dirname, '..', 'page');
-// Страница отдаёт только эти файлы — никаких путей из запроса
+const FONT_DIR = path.join(PAGE_DIR, 'fonts');
+const FONT_NAME = /^[a-z0-9-]+\.woff2$/;
+
+// Страница отдаёт только эти файлы — никаких путей из запроса.
+// Шрифты добавляются из содержимого папки по строгой маске: имя из запроса не становится путём.
 const PAGE_FILES = {
   '/playlist': ['playlist.html', 'text/html; charset=utf-8'],
   '/playlist.css': ['playlist.css', 'text/css; charset=utf-8'],
   '/playlist.js': ['playlist.js', 'text/javascript; charset=utf-8'],
-  '/dos.js': ['dos.js', 'text/javascript; charset=utf-8']
+  '/dos.js': ['dos.js', 'text/javascript; charset=utf-8'],
+  '/pack-fonts.css': ['fonts.css', 'text/css; charset=utf-8']
 };
+const FONT_FILES = (() => {
+  try {
+    return fs.readdirSync(FONT_DIR).filter((name) => FONT_NAME.test(name)).sort();
+  } catch (e) {
+    return [];                                  // папки ещё нет — страница просто без шрифтов
+  }
+})();
+for (const name of FONT_FILES) PAGE_FILES['/fonts/' + name] = ['fonts/' + name, 'font/woff2'];
 
 class Overlay {
   constructor(core, deps = {}) {
@@ -161,4 +174,4 @@ class Overlay {
 
 async function activate(core, deps) { const o = new Overlay(core, deps); o.start(); return o; }
 
-module.exports = { Overlay, activate, PAGE_FILES, cleanSnap };
+module.exports = { Overlay, activate, PAGE_FILES, FONT_FILES, cleanSnap };
