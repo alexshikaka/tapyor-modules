@@ -11,16 +11,19 @@ const { buildFeed, cleanSnap } = require('./feed');
 
 const PAGE_DIR = path.join(__dirname, '..', 'page');
 const MAX_CLIENTS = 16;
+const FONT_DIR = path.join(PAGE_DIR, 'fonts');
+const FONT_NAME = /^[a-z0-9-]+\.woff2$/;
 
 // Страница отдаёт только эти файлы — никаких путей из запроса.
 // Один список на обе страницы: плейлист и моушн используют одни шаблоны стилей.
+// Шрифты добавляются из содержимого папки по строгой маске: имя из запроса не становится путём.
 const PAGE_FILES = {
   '/playlist': ['playlist.html', 'text/html; charset=utf-8'],
   '/motion': ['motion.html', 'text/html; charset=utf-8'],
   '/playlist.css': ['playlist.css', 'text/css; charset=utf-8'],
   '/motion.css': ['motion.css', 'text/css; charset=utf-8'],
   '/overlay.css': ['overlay.css', 'text/css; charset=utf-8'],
-  '/pack-fonts.css': ['pack-fonts.css', 'text/css; charset=utf-8'],
+  '/pack-fonts.css': ['fonts.css', 'text/css; charset=utf-8'],
   '/playlist.js': ['playlist.js', 'text/javascript; charset=utf-8'],
   '/motion.js': ['motion.js', 'text/javascript; charset=utf-8'],
   '/overlay-app.js': ['overlay-app.js', 'text/javascript; charset=utf-8'],
@@ -35,6 +38,15 @@ for (const s of STYLE_DEFS) {
   PAGE_FILES['/styles/' + s.id + '.js'] = ['styles/' + s.id + '.js', 'text/javascript; charset=utf-8'];
   PAGE_FILES['/styles/' + s.id + '.css'] = ['styles/' + s.id + '.css', 'text/css; charset=utf-8'];
 }
+// Белый список шрифтов пака: имена файлов из папки page/fonts по строгой маске.
+const FONT_FILES = (() => {
+  try {
+    return fs.readdirSync(FONT_DIR).filter((name) => FONT_NAME.test(name)).sort();
+  } catch (e) {
+    return [];                                  // папки ещё нет — страница просто без шрифтов
+  }
+})();
+for (const name of FONT_FILES) PAGE_FILES['/fonts/' + name] = ['fonts/' + name, 'font/woff2'];
 
 class Overlay {
   constructor(core, deps = {}) {
@@ -187,4 +199,4 @@ class Overlay {
 
 async function activate(core, deps) { const o = new Overlay(core, deps); o.start(); return o; }
 
-module.exports = { Overlay, activate, PAGE_FILES, MAX_CLIENTS, cleanSnap };
+module.exports = { Overlay, activate, PAGE_FILES, FONT_FILES, MAX_CLIENTS, cleanSnap };
