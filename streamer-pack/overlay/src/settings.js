@@ -1,10 +1,26 @@
 'use strict';
-// Настройки оверлея-плейлиста: значения по умолчанию и проверка того, что пришло из окна настроек.
+// Настройки оверлея: значения по умолчанию и проверка того, что пришло из окна настроек.
 // Хранятся в ядре под ключом mod.overlay (core.settings.get('overlay')).
+// Старые сохранённые настройки читаются: недостающие поля берутся из DEFAULTS.
+
+const { STYLES } = require('./styles');
 
 const POSITIONS = ['br', 'bc', 'bl', 'tr', 'tc', 'tl'];
-const STYLES = ['dos', 'typography'];
+const SCENES = ['brand', 'rush', 'mask', 'plate'];
 const MAX_COUNT = 10;
+const MOTION_DEFAULTS = Object.freeze({
+  style: 'dos',
+  pos: 'bc',
+  dx: 0,
+  dy: 0,
+  size: 100,
+  color: '#FFFFFF',
+  vizColor: '#C8F542',
+  outline: true,
+  nick: true,
+  scene: 'brand',
+  hold: 5
+});
 
 const DEFAULTS = Object.freeze({
   style: 'dos',
@@ -13,8 +29,9 @@ const DEFAULTS = Object.freeze({
   dy: 0,
   size: 100,          // %, 80–150
   color: '#FFB000',   // цвет текста
-  vizColor: '#FFB000', // цвет осциллограммы
+  vizColor: '#FFB000', // цвет визуализатора
   outline: true,      // чёрная пиксельная обводка
+  nick: true,         // показывать ник заказавшего (если ядро его прислало)
   count: 3,           // сколько песен «дальше», 0–10
   fade: true,         // затухание строк списка
   fadePct: 100,       // сила затухания, 0–100
@@ -28,10 +45,11 @@ const DEFAULTS = Object.freeze({
   marq: true,
   lang: 'en',         // подписи TRACK/ARTIST или ТРЕК/АРТИСТ
   viz: 'wave',        // wave — текущая волна; spectrum — реальные 32 полосы из Тапёра
-  smooth: 'mid'       // fast | mid | slow
+  smooth: 'mid',      // fast | mid | slow
+  motion: MOTION_DEFAULTS
 });
 
-const BOOL = ['outline', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
+const BOOL = ['outline', 'nick', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
 
 function clampNum(v, lo, hi, def) {
   const n = Number(v);
@@ -44,6 +62,24 @@ function normColor(v, def) {
   if (/^#[0-9a-f]{6}$/i.test(s)) return s.toUpperCase();
   if (/^#[0-9a-f]{3}$/i.test(s)) return ('#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]).toUpperCase();
   return def;
+}
+
+function normMotion(raw, base) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const out = { ...MOTION_DEFAULTS };
+  if (STYLES.includes(r.style)) out.style = r.style;
+  if (POSITIONS.includes(r.pos)) out.pos = r.pos;
+  out.dx = clampNum(r.dx, -900, 900, out.dx);
+  out.dy = clampNum(r.dy, -500, 500, out.dy);
+  out.size = clampNum(r.size, 80, 150, out.size);
+  out.color = normColor(r.color, out.color);
+  out.vizColor = normColor(r.vizColor, out.vizColor);
+  out.outline = typeof r.outline === 'boolean' ? r.outline : out.outline;
+  out.nick = typeof r.nick === 'boolean' ? r.nick : out.nick;
+  if (SCENES.includes(r.scene)) out.scene = r.scene;
+  out.hold = clampNum(r.hold, 3, 15, out.hold);
+  if (base && base.scene && !SCENES.includes(r.scene)) out.scene = base.scene;
+  return out;
 }
 
 // Любой мусор превращается в рабочие настройки: неизвестные ключи отбрасываются.
@@ -64,7 +100,8 @@ function normalize(raw) {
   if (r.viz === 'spectrum') out.viz = 'spectrum';
   else if (r.viz === 'wave' || r.viz === 'real' || r.viz === 'fake') out.viz = 'wave';
   if (['fast', 'mid', 'slow'].includes(r.smooth)) out.smooth = r.smooth;
+  out.motion = normMotion(r.motion, DEFAULTS.motion);
   return out;
 }
 
-module.exports = { DEFAULTS, POSITIONS, STYLES, MAX_COUNT, normalize };
+module.exports = { DEFAULTS, POSITIONS, STYLES, SCENES, MAX_COUNT, MOTION_DEFAULTS, normalize };

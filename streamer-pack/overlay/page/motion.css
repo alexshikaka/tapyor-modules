@@ -1,0 +1,8 @@
+/* Моушн-оверлей: та же страница, но очередь и прогресс не показываются. */
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+#ov { will-change: transform, opacity; }
+#ov.motion-hidden { visibility: hidden; }
+#ov.motion-in { visibility: visible; }
+#ov .queue, #ov .prog, #ov [data-pl] { display: none !important; }
+#ov .motion-plate { display: none; }
+#ov.motion-plate-on .motion-plate { display: block; }

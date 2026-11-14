@@ -1,8 +1,8 @@
 'use strict';
 // Что уходит странице оверлея: настройки + играющий трек + следующие песни.
 // Снимок плеера приходит от ядра (core.player): { np, next, after }.
-//   np    — { title, artist, cover, pos, dur, playing, at } или null (ничего не играет)
-//   next  — следующие в очереди (заказы, свои треки), по порядку
+//   np    — { title, artist, who, cover, pos, dur, playing, at } или null (ничего не играет)
+//   next  — следующие в очереди (заказы, свои треки), по порядку, у строк может быть who
 //   after — что сыграет фон после очереди (волна или фоновый плейлист): для «добирать из волны»
 
 const MAX_TEXT = 200;
@@ -19,13 +19,19 @@ function coverFor(url) {
   return '';
 }
 
-function row(t) { return { title: txt(t && t.title), artist: txt(t && t.artist) }; }
+function row(t) {
+  const r = { title: txt(t && t.title), artist: txt(t && t.artist) };
+  const who = txt(t && t.who);
+  if (who) r.who = who;
+  return r;
+}
 
 function cleanSnap(s) {
   const snap = s && typeof s === 'object' ? s : {};
   const np = snap.np && typeof snap.np === 'object' && txt(snap.np.title) ? {
     title: txt(snap.np.title),
     artist: txt(snap.np.artist),
+    who: txt(snap.np.who),
     cover: String(snap.np.cover || ''),
     pos: num(snap.np.pos),
     dur: num(snap.np.dur),

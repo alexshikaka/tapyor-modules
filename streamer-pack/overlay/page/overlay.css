@@ -1,0 +1,134 @@
+/* Общие правила оверлея. Страница прозрачная, 1920×1080, без стилей в HTML.
+   data-h (l|c|r) и data-v (t|b) ставятся на #ov и на корень стиля. */
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+body { font-synthesis: none; }
+
+#ov {
+  position: absolute;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: none;
+  color: var(--c, #fff);
+  text-align: left;
+  z-index: 2;
+}
+#ov[hidden] { display: none; }
+#ov[data-h="r"] { text-align: right; }
+#ov[data-h="c"] { text-align: center; }
+
+.style-root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: none;
+  color: var(--c, #fff);
+  text-align: inherit;
+  position: relative;
+  font-synthesis: none;
+}
+.style-root[data-v="b"] { flex-direction: column-reverse; }
+.style-root[data-h="r"] { text-align: right; }
+.style-root[data-h="c"] { text-align: center; }
+.style-root * { box-sizing: border-box; }
+
+/* Главный ряд «обложка + текст» у большинства стилей. Справа — зеркалим. */
+.row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.style-root[data-h="r"] > .row,
+.style-root[data-h="r"] .row.mirror { flex-direction: row-reverse; }
+.style-root[data-h="c"] > .row { justify-content: center; }
+
+/* Место обложки и заглушка. Настоящая обложка перекрывает заглушку. */
+.cover-slot {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  line-height: 0;
+  background: var(--cover-bg, #111);
+}
+.cover-slot .cover-fallback,
+.cover-slot .cover-img,
+.cover-slot canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cover-slot .cover-fallback {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, var(--c2, var(--c)) 0 10%, transparent 11%),
+    repeating-radial-gradient(circle at 50% 50%, var(--cover-bg, #111) 0 3px, var(--c3, #333) 4px 5px);
+}
+.cover-slot .cover-img { object-fit: cover; }
+.cover-slot.has-cover .cover-fallback { display: none; }
+.cover-slot canvas { image-rendering: auto; }
+.style-root.pixel .cover-slot canvas { image-rendering: pixelated; }
+.style-root.mono-cover .cover-slot canvas,
+.style-root.mono-cover .cover-slot .cover-img { filter: grayscale(1) contrast(1.35); }
+.no-cover .cover-slot { display: none !important; }
+
+/* Текст: название бывает бегущей строкой, исполнитель и ник не режутся. */
+.title, .artist, .who, .time, .meta { min-width: 0; }
+.title { white-space: nowrap; }
+.artist, .who { white-space: nowrap; }
+.who { font-size: .8em; line-height: 1.2; opacity: .92; }
+.queue { min-width: 0; display: flex; flex-direction: column; }
+.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.queue .q-who { opacity: .72; }
+.style-root[data-v="b"] .queue { flex-direction: column-reverse; }
+.style-root[data-nr="1"] .queue { flex-direction: column; }
+
+.mq { animation: ov-mq linear infinite; }
+.mqv { animation: ov-mqv linear infinite; }
+@keyframes ov-mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes ov-mqv { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@media (prefers-reduced-motion: reduce) {
+  .mq, .mqv { animation: none; }
+}
+
+.prog { display: flex; }
+.prog i { display: block; flex: 1; background: var(--c0, rgba(255,255,255,.25)); }
+.prog i.on { background: var(--c); }
+
+/* Общая чёрная обводка для гладких шрифтов; пиксельные стили переопределяют. */
+#ov.outline { paint-order: stroke fill; }
+#ov.outline .style-root.glow { text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+
+/* Тишина: оверлей остаётся в кадре, но пустой. */
+#idle {
+  position: absolute;
+  left: 96px;
+  bottom: 54px;
+  display: none;
+  color: var(--c, #fff);
+  font: 700 30px/1.1 "Pixelify Sans", monospace;
+  letter-spacing: .05em;
+  text-shadow: 0 2px 8px rgba(0,0,0,.7);
+}
+body.idle #idle { display: block; }
+body.idle #ov { display: none; }
+
+/* Моушн: общая подводка и видимость. */
+.motion-plate {
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  display: none;
+  background: rgba(10, 12, 22, .58);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+}
+#ov.motion-plate-on .motion-plate { display: block; }
+#ov.motion-hidden { visibility: hidden; }
+#ov.motion-in { visibility: visible; }
+
+/* Пиксельная обводка (8 теней) — только для пиксельных стилей. */
+#ov.outline .style-root.pixel {
+  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
+    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
+}
