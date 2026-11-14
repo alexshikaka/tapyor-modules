@@ -219,8 +219,10 @@ const measured = await page.addInitScript(() => {
     };
     const labels = { title: pseudo(title, '::before'), artist: pseudo(artist, '::before'), time: pseudo(time, '::before') };
     const secondOpacity = rows[1] ? getComputedStyle(rows[1]).opacity : '';
+    // OV6: какой вид визуализатора страница реально рисует (ставится при применении настроек).
+    const views = [...root.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || '');
     const sig = JSON.stringify({
-      style: root.dataset.style, visible, labels, queueRows: rows.length,
+      style: root.dataset.style, visible, labels, queueRows: rows.length, views,
       first: rows[0] ? rows[0].textContent : '', second: secondOpacity,
       title: title ? title.textContent : '', artist: artist ? artist.textContent : '', who: who ? who.textContent : '',
       // Кадр вертушки DOS крутится, его рамка не должна влиять на сравнение «ничего не изменилось».
@@ -228,7 +230,7 @@ const measured = await page.addInitScript(() => {
         box(root.querySelector('[data-role="prog"]')), ...viz.map(box)]
     });
     return {
-      visible, labels, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
+      visible, labels, views, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
       secondOpacity, sig,
       titleInfo: title ? {
         cls: title.className, cw: title.clientWidth, sw: title.scrollWidth,
@@ -566,8 +568,9 @@ const measured = await page.addInitScript(() => {
 
 // ---------- режим --features: каждый ключ каждого стиля выкл/вкл ----------
 if (featuresMode) {
-  const ALL_FEATURES = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'count', 'fade', 'fill', 'nums'];
-  const onVal = (k) => (k === 'count' ? '3' : k === 'lang' ? 'en' : '1');
+  const ALL_FEATURES = ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang', 'count', 'fade', 'fill', 'nums'];
+  const onVal = (k) => (k === 'count' ? '3' : k === 'lang' ? 'en' : k === 'viz' ? 'spectrum' : '1');
+  const offVal = (k) => (k === 'viz' ? 'wave' : '0');
   const labelText = (l) => Object.values(l)
     .filter((v) => v && v !== 'normal' && v !== 'none' && v !== '""').join(' ').trim();
   let featureTotal = 0, featureBad = 0;
@@ -591,7 +594,7 @@ if (featuresMode) {
       featureBad++; featureFailures.push({ style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
     }
     for (const key of ALL_FEATURES) {
-      const off = await open(style, key + ':0');
+      const off = await open(style, key + ':' + offVal(key));
       const on = await open(style, key + ':' + onVal(key));
       featureTotal += 2;
       const fail = (msg, extra) => { featureBad++; featureFailures.push({ style, key, msg, ...extra }); };
@@ -603,6 +606,14 @@ if (featuresMode) {
       if (key === 'fill') {
         // fill — ключ данных (добор из волны), разметка от него не зависит; проверяем в Node-тестах.
         if (off.r.sig !== on.r.sig) fail('fill не должен менять разметку');
+        continue;
+      }
+      if (key === 'viz') {
+        // Вид визуализатора: страница рисует именно выбранный вид (wave/spectrum).
+        if (!off.r.views.length) { fail('у стиля нет визуализатора для вида', { views: off.r.views }); continue; }
+        if (off.r.views.some((v) => v !== 'wave') || on.r.views.some((v) => v !== 'spectrum')) {
+          fail('вид визуализатора не переключается', { off: off.r.views, on: on.r.views });
+        }
         continue;
       }
       if (key === 'lang') {
@@ -627,7 +638,7 @@ if (featuresMode) {
     if (styles.indexOf(style) % 5 === 0) console.log('… features:', style, 'ошибок', featureBad);
   }
   // Моушн: свой набор «Что показывать», очередь к нему не относится.
-  const MOTION_SHOW = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang'];
+  const MOTION_SHOW = ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang'];
   const QUEUE_KEYS = ['count', 'fade', 'fill', 'nums'];
   let motionTotal = 0;
   async function openMotion(style, feat) {
@@ -658,13 +669,20 @@ if (featuresMode) {
       featureBad++; featureFailures.push({ page: 'motion', style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
     }
     for (const key of [...MOTION_SHOW, ...QUEUE_KEYS]) {
-      const off = await openMotion(style, key + ':0');
-      const on = await openMotion(style, key + ':' + (key === 'lang' ? 'en' : '1'));
+      const off = await openMotion(style, key + ':' + offVal(key));
+      const on = await openMotion(style, key + ':' + onVal(key));
       motionTotal += 2;
       const fail = (msg, extra) => { featureBad++; featureFailures.push({ page: 'motion', style, key, msg, ...extra }); };
       if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
       if (QUEUE_KEYS.includes(key) || !declared.includes(key)) {
         if (off.r.sig !== base.r.sig || on.r.sig !== base.r.sig) fail('ключ не из набора моушна изменил вид');
+        continue;
+      }
+      if (key === 'viz') {
+        if (!off.r.views.length) { fail('у стиля нет визуализатора для вида', { views: off.r.views }); continue; }
+        if (off.r.views.some((v) => v !== 'wave') || on.r.views.some((v) => v !== 'spectrum')) {
+          fail('вид визуализатора не переключается', { off: off.r.views, on: on.r.views });
+        }
         continue;
       }
       if (key === 'lang') {

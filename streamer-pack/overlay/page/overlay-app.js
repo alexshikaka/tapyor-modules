@@ -62,7 +62,7 @@
     lastSse: Date.now(), builtStyle: '', root: null, def: null, roles: {},
     coverSlot: null, coverUrl: null, queueSig: '', prog: -1, paused: false,
     trackKey: '', firstTrack: true, motionTimer: null, motionAnims: [], demoAt: Date.now(),
-    demoIndex: 0, pausedLast: null, vizPausedAt: 0
+    demoIndex: 0, pausedLast: null, vizPausedAt: 0, ndPrev: 0
   };
 
   var DEMO_QUEUE = DEMO_LIB.queue(DOPT.queue);
@@ -199,7 +199,10 @@
 
     if (S.roles.time) S.roles.time.hidden = has('time') ? !cfg.time : false;
     if (S.roles.prog) S.roles.prog.hidden = has('prog') ? !cfg.prog : false;
+    var vizView = V.viewOf(cfg.viz);
     S.root.querySelectorAll('[data-role="viz"]').forEach(function (v) { v.hidden = has('osc') ? !cfg.osc : false; });
+    // Вид «Волна / Спектр» ставится сразу при настройке, не дожидаясь кадра анимации.
+    S.root.querySelectorAll('[data-viz]').forEach(function (z) { z.dataset.view = vizView; });
     S.root.querySelectorAll('[data-role="queue"]').forEach(function (q) { q.hidden = MOTION; });
     S.root.querySelectorAll('[data-role="spin"]').forEach(function (el) { el.hidden = has('spin') ? !cfg.spin : false; });
     if (S.coverSlot) S.coverSlot.hidden = has('cover') ? !cfg.cover : false;
@@ -586,25 +589,18 @@
     var st = vizMap.get(z);
     if (!st) {
       var n = Number(z.dataset.cols) || 0;
-      st = { shown: new Array(n).fill(0), hist: new Array(n).fill(0), last: 0, lastSpec: 0 };
+      st = { shown: new Array(n).fill(0), hist: new Array(n).fill(0), last: 0 };
       vizMap.set(z, st);
     }
     return st;
-  }
-  function interp(arr, i, n) { return V.interp(arr, i, n); }
-  function simulated(now, i) {
-    return 0.18 + 0.82 * Math.abs(Math.sin(now / 360 + i * 0.55) * Math.cos(now / 610 + i * 0.17));
-  }
-  function specAt(i, n, now, live) {
-    if (live) return interp(S.spec, i, n);
-    var lv = S.lvAt && now - S.lvAt < 1500 ? S.lv : D.imitation(now / 300, (i % 7) / 7);
-    return simulated(now, i) * (0.45 + 0.55 * lv);
   }
   function levelNow(now) {
     if (S.lvAt && now - S.lvAt < 1500) return S.lv;
     return D.imitation(now / 300, 0.4);
   }
 
+  // OV6: у каждого типа визуализатора два вида — «Волна» и «Спектр».
+  // Какие числа рисовать, решают чистые функции viz.js; страница только сглаживает и раскладывает.
   function drawViz(now) {
     if (!S.root) return;
     var cfg = currentCfg();
@@ -617,33 +613,36 @@
     } else S.vizPausedAt = 0;
     var lv = paused ? 0 : levelNow(now);
     var alpha = D.smoothAlpha(cfg.smooth);
-    // DOS-лента умеет переключаться «волна/спектр»; остальные стили рисуют свой вид всегда.
-    var specMode = cfg.style === 'dos' && cfg.viz === 'spectrum';
+    var view = V.viewOf(cfg.viz);
+    var phase = now / 1000;
+    // На паузе (и при выключенном визуализаторе) живой спектр не берём: всё плавно опускается.
+    var liveNow = paused ? false : liveSpec;
     S.root.querySelectorAll('[data-viz]').forEach(function (z) {
       if (z.closest('[hidden]')) return;
       var st = getViz(z), kind = z.dataset.viz, n = Number(z.dataset.cols) || z.children.length;
-      var target = paused ? 0 : lv;
-      if (kind === 'b' || kind === 'bw' || kind === 'r' || kind === 'g' || kind === 'w') {
-        for (var i = 0; i < n; i++) {
-          var t = paused ? 0 : specAt(i, n, now, liveSpec);
-          var cur = st.shown[i] || 0;
-          st.shown[i] = V.next(cur, t, alpha);
-        }
-      } else if (kind === 'sp') {
-        if (!paused && (!st.last || now - st.last > 170)) {
+      // Для проверок: по какому виду сейчас рисуется. На сам вид не влияет.
+      z.dataset.view = view;
+      var vals = null;
+      if (kind === 'sp') {
+        // Лента: волна — история громкости, спектр — полосы. Пауза — всё плавно опускается.
+        if (paused) {
+          for (var h = 0; h < n; h++) st.hist[h] = (st.hist[h] || 0) * 0.82;
+        } else if (view === 'spectrum' && liveSpec) {
+          st.hist = V.ribbonStep(st.hist, view, { n: n, spec: S.spec, live: true, rate: alpha });
+        } else if (!st.last || now - st.last > 170) {
           st.last = now;
-          if (specMode && liveSpec) {
-            for (var q = 0; q < n; q++) st.hist[q] = V.next(st.hist[q] || 0, interp(S.spec, q, n), alpha);
-          } else {
-            V.historyPush(st.hist, lv, 0.05);
-          }
+          // Плавность действует и на ленту: новый столбик подтягивается к громкости с тем же шагом.
+          st.hist = V.ribbonStep(st.hist, 'wave', { n: n, lv: lv, min: 0.05, rate: alpha });
         }
-        if (paused) for (var h = 0; h < n; h++) st.hist[h] *= 0.82;
+      } else if (kind !== 'w') {
+        vals = V.values(kind, view, {
+          n: n, lv: lv, spec: S.spec, live: liveNow, phase: phase, prev: st.shown[0]
+        });
+        for (var i = 0; i < n; i++) st.shown[i] = V.next(st.shown[i] || 0, vals[i] || 0, alpha);
       }
       if (kind === 'b') {
         for (var b = 0; b < z.children.length; b++) {
-          var v = st.shown[b] || 0;
-          z.children[b].style.height = Math.max(3, v * 100) + '%';
+          z.children[b].style.height = Math.max(3, (st.shown[b] || 0) * 100) + '%';
         }
       } else if (kind === 'bw') {
         for (var w = 0; w < z.children.length; w++) z.children[w].style.width = Math.max(3, (st.shown[w] || 0) * 100) + '%';
@@ -661,26 +660,35 @@
       } else if (kind === 'sp') {
         for (var p = 0; p < z.children.length; p++) z.children[p].style.height = Math.max(3, (st.hist[p] || 0) * 100) + '%';
       } else if (kind === 'nd') {
+        // У №20 две стрелки: левая — низы (или громкость), правая — верха (или громкость с задержкой).
+        var idx = Number(z.dataset.m) === 1 ? 1 : 0;
+        vals = V.values('nd', view, {
+          lv: lv, spec: S.spec, live: liveNow, prev: idx === 1 ? S.ndPrev || 0 : lv
+        });
+        st.shown[0] = V.next(st.shown[0] || 0, vals[idx] || 0, alpha);
+        if (idx === 0) S.ndPrev = st.shown[0];
         var nd = z.querySelector('.needle');
-        st.shown[0] = V.next(st.shown[0] || 0, target, alpha);
         var angle = V.needleAngle(st.shown[0]);
         if (nd) nd.style.transform = 'rotate(' + angle.toFixed(2) + 'deg)';
       } else if (kind === 'w') {
-        drawWave(z, st, paused, now, liveSpec);
+        drawWave(z, st, paused, now, liveNow, view, alpha);
       }
     });
   }
 
-  function drawWave(z, st, paused, now, live) {
+  function drawWave(z, st, paused, now, live, view, alpha) {
     var c = z.querySelector('canvas'); if (!c) return;
     var g = c.getContext('2d'); if (!g) return;
     var W = c.width, H = c.height;
     g.clearRect(0, 0, W, H);
     var pts = 60;
+    var vals = V.values('w', view, {
+      n: pts + 1, lv: paused ? 0 : levelNow(now), spec: S.spec, live: live, phase: now / 1000
+    });
     g.beginPath();
     for (var i = 0; i <= pts; i++) {
-      var v = paused ? 0 : specAt(i, pts + 1, now, live);
-      var y = V.waveY(v, i, pts, H);
+      st.shown[i] = V.next(st.shown[i] || 0, vals[i] || 0, alpha);
+      var y = V.waveY(st.shown[i], i, pts, H);
       var x = i * W / pts;
       if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
     }
@@ -688,10 +696,7 @@
     g.strokeStyle = cs.getPropertyValue('--v').trim() || '#fff';
     g.lineWidth = Math.max(2, H / 12);
     g.lineJoin = 'round';
-    g.shadowColor = 'rgba(0,0,0,.85)';
-    g.shadowBlur = 3;
     g.stroke();
-    g.shadowBlur = 0;
   }
 
   function rafLoop() {

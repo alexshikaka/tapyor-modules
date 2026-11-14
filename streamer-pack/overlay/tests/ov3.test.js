@@ -10,12 +10,12 @@ const Demo = require('../page/demo');
 const { PAGE_FILES } = require('../src/index');
 
 const Q = ['count', 'fade', 'fill', 'nums'];
-const BASE = ['cover', 'osc', 'marq', ...Q];
-const WITH_TIME = ['cover', 'time', 'osc', 'marq', ...Q];
+const BASE = ['cover', 'osc', 'viz', 'marq', ...Q];
+const WITH_TIME = ['cover', 'time', 'osc', 'viz', 'marq', ...Q];
 
 // Таблица «стиль → features → vizKind» из договора. Менять только вместе с договором.
 const EXPECTED = {
-  card: { features: ['cover', 'osc', 'marq', ...Q], vizKind: 'spectrum' },
+  card: { features: ['cover', 'osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },
   vinyl: { features: BASE, vizKind: 'spectrum' },
   bigtype: { features: BASE, vizKind: 'spectrum' },
   column: { features: BASE, vizKind: 'spectrum' },
@@ -26,20 +26,20 @@ const EXPECTED = {
   win95: { features: WITH_TIME, vizKind: 'spectrum' },
   sys7: { features: WITH_TIME, vizKind: 'spectrum' },
   winamp: { features: WITH_TIME, vizKind: 'spectrum' },
-  dos: { features: ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
+  dos: { features: ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
   swiss: { features: ['cover', 'time', 'marq', ...Q], vizKind: null },
-  hud8: { features: ['cover', 'time', 'prog', 'marq', ...Q], vizKind: null },
+  hud8: { features: ['cover', 'time', 'osc', 'viz', 'prog', 'marq', ...Q], vizKind: 'spectrum' },
   synth: { features: BASE, vizKind: 'spectrum' },
   paper: { features: BASE, vizKind: 'spectrum' },
   polaroid: { features: BASE, vizKind: 'spectrum' },
   code: { features: WITH_TIME, vizKind: 'spectrum' },
-  cassette: { features: ['osc', 'marq', ...Q], vizKind: 'spectrum' },
+  cassette: { features: ['osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },
   vu: { features: BASE, vizKind: 'level' },
   neon: { features: BASE, vizKind: 'spectrum' },
   film: { features: WITH_TIME, vizKind: 'spectrum' },
   citypop: { features: BASE, vizKind: 'spectrum' },
   popart: { features: BASE, vizKind: 'spectrum' },
-  blueprint: { features: ['cover', 'time', 'osc', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
+  blueprint: { features: ['cover', 'time', 'osc', 'viz', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
   radar: { features: WITH_TIME, vizKind: 'spectrum' }
 };
 
@@ -132,8 +132,11 @@ test('OV3: особые ключи только там, где элементы 
   assert.deepEqual(withKey('prog'), ['dos', 'hud8']);
   assert.deepEqual(withKey('time'), ['win95', 'sys7', 'winamp', 'dos', 'swiss', 'hud8', 'code', 'film', 'blueprint', 'radar']);
   assert.deepEqual(withKey('cover'), STYLES.filter((id) => id !== 'cassette'));
-  // Визуализатор: ключ osc есть ровно тогда, когда vizKind не null.
-  for (const s of STYLE_DEFS) assert.equal(s.features.includes('osc'), s.vizKind !== null, s.id);
-  assert.deepEqual(STYLE_DEFS.filter((s) => s.vizKind === null).map((s) => s.id), ['swiss', 'hud8']);
+  // Визуализатор: ключи osc и viz есть ровно тогда, когда vizKind не null (OV6 — «Волна / Спектр»).
+  for (const s of STYLE_DEFS) {
+    assert.equal(s.features.includes('osc'), s.vizKind !== null, s.id + ': osc');
+    assert.equal(s.features.includes('viz'), s.vizKind !== null, s.id + ': viz');
+  }
+  assert.deepEqual(STYLE_DEFS.filter((s) => s.vizKind === null).map((s) => s.id), ['swiss']);
   assert.deepEqual(STYLE_DEFS.filter((s) => s.vizKind === 'level').map((s) => s.id), ['vu']);
 });

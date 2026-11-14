@@ -6,19 +6,20 @@
 
 // Ключи «Что показывать» из договора OVERLAYS-FEATURES.md. У стиля в features только те,
 // чьи элементы у него реально есть; ключей очереди у моушна нет никогда.
-const FEATURE_KEYS = Object.freeze(['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'count', 'fade', 'fill', 'nums']);
+const FEATURE_KEYS = Object.freeze(['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang', 'count', 'fade', 'fill', 'nums']);
 const QUEUE_FEATURES = Object.freeze(['count', 'fade', 'fill', 'nums']);
 const MOTION_FEATURE_KEYS = Object.freeze(['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'viz', 'smooth']);
 const VIZ_KINDS = Object.freeze(['spectrum', 'level', null]);
 
 // Короткая запись очереди: она есть у всех стилей плейлиста.
+// viz — переключатель «Волна / Спектр»: есть у всех, где есть визуализатор (OV6).
 const Q = QUEUE_FEATURES;
-const BASE = ['cover', 'osc', 'marq', ...Q];
-const WITH_TIME = ['cover', 'time', 'osc', 'marq', ...Q];
+const BASE = ['cover', 'osc', 'viz', 'marq', ...Q];
+const WITH_TIME = ['cover', 'time', 'osc', 'viz', 'marq', ...Q];
 
 const STYLE_DEFS = Object.freeze([
   { id: 'card', num: 1, name: 'Карточка', font: 'Manrope', have: false, color: '#FFFFFF', vizColor: '#F0654F',
-    features: ['cover', 'osc', 'marq', ...Q], vizKind: 'spectrum' },
+    features: ['cover', 'osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },
   { id: 'vinyl', num: 2, name: 'Винил', font: 'Lora', have: false, color: '#FFF4D6', vizColor: '#E9C46A',
     features: BASE, vizKind: 'spectrum' },
   { id: 'bigtype', num: 3, name: 'Крупный шрифт', font: 'Unbounded', have: false, color: '#FFFFFF', vizColor: '#FFE14D',
@@ -40,11 +41,12 @@ const STYLE_DEFS = Object.freeze([
   { id: 'winamp', num: 11, name: 'Winamp', font: 'Pixelify Sans', have: false, color: '#2CFF2C', vizColor: '#20E020',
     features: WITH_TIME, vizKind: 'spectrum' },
   { id: 'dos', num: 12, name: 'DOS-терминал', font: 'Pixelify Sans', have: true, color: '#FFB000', vizColor: '#FFB000',
-    features: ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
+    features: ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
   { id: 'swiss', num: 13, name: 'Швейцарский стиль', font: 'Golos Text', have: false, color: '#FFFFFF', vizColor: '#FF2D2D',
     features: ['cover', 'time', 'marq', ...Q], vizKind: null },
   { id: 'hud8', num: 14, name: '8-бит HUD', font: 'Tiny5', have: false, color: '#FFFFFF', vizColor: '#FFD23F',
-    features: ['cover', 'time', 'prog', 'marq', ...Q], vizKind: null },
+    // OV6: у 8-бит HUD теперь своя лента визуализатора — «волна / спектр».
+    features: ['cover', 'time', 'osc', 'viz', 'prog', 'marq', ...Q], vizKind: 'spectrum' },
   { id: 'synth', num: 15, name: 'Синтвейв', font: 'Russo One', have: false, color: '#FFFFFF', vizColor: '#FF2BD6',
     features: BASE, vizKind: 'spectrum' },
   { id: 'paper', num: 16, name: 'Газета', font: 'Playfair Display', have: false, color: '#FFFFFF', vizColor: '#FFFFFF',
@@ -55,7 +57,7 @@ const STYLE_DEFS = Object.freeze([
     features: WITH_TIME, vizKind: 'spectrum' },
   { id: 'cassette', num: 19, name: 'Кассета', font: 'PT Mono', have: false, color: '#FFFFFF', vizColor: '#E8D9B5',
     // У кассеты вместо обложки — сама кассета, поэтому переключателя обложки у неё нет.
-    features: ['osc', 'marq', ...Q], vizKind: 'spectrum' },
+    features: ['osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },
   { id: 'vu', num: 20, name: 'VU-метр', font: 'IBM Plex Mono', have: false, color: '#FFFFFF', vizColor: '#FFCC00',
     features: BASE, vizKind: 'level' },
   { id: 'neon', num: 21, name: 'Неоновая вывеска', font: 'Pacifico', have: false, color: '#FF5FD2', vizColor: '#5FF3FF',
@@ -67,7 +69,7 @@ const STYLE_DEFS = Object.freeze([
   { id: 'popart', num: 25, name: 'Поп-арт комикс', font: 'Dela Gothic One', have: false, color: '#FFFFFF', vizColor: '#FF3B6B',
     features: BASE, vizKind: 'spectrum' },
   { id: 'blueprint', num: 26, name: 'Чертёж', font: 'IBM Plex Mono', have: false, color: '#9FE3FF', vizColor: '#9FE3FF',
-    features: ['cover', 'time', 'osc', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
+    features: ['cover', 'time', 'osc', 'viz', 'marq', 'lang', ...Q], vizKind: 'spectrum' },
   { id: 'radar', num: 27, name: 'Радар HUD', font: 'Tektur', have: false, color: '#7DFFB2', vizColor: '#7DFFB2',
     features: WITH_TIME, vizKind: 'spectrum' }
 ].map((s) => Object.freeze({ ...s, features: Object.freeze(s.features.slice()) })));

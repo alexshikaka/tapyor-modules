@@ -95,14 +95,15 @@
     return box;
   };
 
-  // Несколько стрелок VU (у №20 две) — каждая со своим data-m.
+  // Несколько стрелок VU (у №20 две) — data-m это номер стрелки: 0 — левая, 1 — правая.
+  // Страница по нему выбирает, что показывать: громкость/низы слева, верха справа.
   K.needles = function (marks) {
     var box = K.h('div', 'viz viz-nd');
     box.dataset.role = 'viz';
     for (var i = 0; i < marks.length; i++) {
       var z = K.h('div', 'vz vz-nd');
       z.dataset.viz = 'nd';
-      z.dataset.m = String(marks[i]);
+      z.dataset.m = String(i);
       z.appendChild(K.h('div', 'needle'));
       box.appendChild(z);
     }
