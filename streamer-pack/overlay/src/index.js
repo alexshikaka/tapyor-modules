@@ -33,6 +33,7 @@ const PAGE_FILES = {
   '/colors.js': ['colors.js', 'text/javascript; charset=utf-8'],
   '/viz.js': ['viz.js', 'text/javascript; charset=utf-8'],
   '/motion-math.js': ['motion-math.js', 'text/javascript; charset=utf-8'],
+  '/textfit.js': ['textfit.js', 'text/javascript; charset=utf-8'],
   '/demo.js': ['demo.js', 'text/javascript; charset=utf-8']
 };
 for (const s of STYLE_DEFS) {

@@ -4,6 +4,7 @@
   'use strict';
 
   var K = window.TapKit, D = window.TapDos, C = window.TapColors, V = window.TapViz, M = window.TapMotionMath;
+  var T = window.TapTextFit;
   var DEMO_LIB = window.TapDemo;
   var DOPT = DEMO_LIB.options(location.search);
   var PREVIEW = DOPT.preview;
@@ -381,13 +382,18 @@
   }
 
   function marquee(el, text, horizontal) {
-    var gap = '      ';
+    // Сначала убираем обычный текст: иначе он остаётся стоять перед бегущей копией
+    // (так название резалось в №8, а Winamp показывал статичный хвост строки).
+    el.textContent = '';
     var sp = document.createElement('span');
     sp.className = horizontal ? 'mq' : 'mqv';
-    sp.textContent = text + gap + text + gap;
+    sp.textContent = T.marqueeText(text);
     el.appendChild(sp);
     var size = horizontal ? sp.scrollWidth : sp.scrollHeight;
     sp.style.animationDuration = Math.max(6, Math.round(size / 2 / 45)) + 's';
+    // На правом крае текст по умолчанию прижат вправо: начало строки ушло бы за коробку.
+    // Для бегущей строки важно видеть начало сразу, поэтому внутри коробки — слева.
+    if (horizontal) el.style.textAlign = 'left';
   }
 
   function fitVerticalTitle(cfg) {
@@ -397,10 +403,11 @@
     var col = S.root.querySelector('[data-col="vertical"]');
     var was = t.style.display;
     t.style.display = 'none';                 // колонку мерим без названия, иначе она тянется за ним
-    var max = Math.max(col ? col.offsetHeight : 0, 300);
+    var colH = col ? col.offsetHeight : 0;
     t.style.display = was;
-    if (t.scrollHeight <= max + 1) return;
-    t.style.height = max + 'px';
+    var plan = T.verticalPlan(colH, t.scrollHeight, 300);
+    if (!plan.run) return;                     // короткому высоту не задаём — стоит как в образце
+    t.style.height = plan.height + 'px';
     t.style.overflow = 'hidden';
     if (marqOn(cfg)) marquee(t, S.np.title, false);
   }
