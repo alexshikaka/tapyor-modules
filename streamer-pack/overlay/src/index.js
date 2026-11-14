@@ -28,6 +28,7 @@ const PAGE_FILES = {
   '/motion.js': ['motion.js', 'text/javascript; charset=utf-8'],
   '/overlay-app.js': ['overlay-app.js', 'text/javascript; charset=utf-8'],
   '/style-kit.js': ['style-kit.js', 'text/javascript; charset=utf-8'],
+  '/styles-meta.js': ['styles-meta.js', 'text/javascript; charset=utf-8'],
   '/dos.js': ['dos.js', 'text/javascript; charset=utf-8'],
   '/colors.js': ['colors.js', 'text/javascript; charset=utf-8'],
   '/viz.js': ['viz.js', 'text/javascript; charset=utf-8'],

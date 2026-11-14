@@ -2,6 +2,8 @@
    data-h (l|c|r) и data-v (t|b) ставятся на #ov и на корень стиля. */
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
 body { font-synthesis: none; }
+/* hidden должен побеждать любые display из стилей: иначе выключатели «Что показывать» не работают. */
+#ov [hidden] { display: none !important; }
 
 #ov {
   position: absolute;
@@ -84,6 +86,9 @@ body { font-synthesis: none; }
 
 /* Текст: название бывает бегущей строкой, исполнитель и ник не режутся. */
 .title, .artist, .who, .time, .meta { min-width: 0; }
+/* Колонка текста должна ужиматься: иначе длинное название растягивает её по min-content,
+   и бегущая строка не включается (clientWidth оказывается шириной всего текста). */
+.textcol { min-width: 0; }
 .title { white-space: nowrap; }
 .artist, .who { white-space: nowrap; }
 .who { font-size: .8em; line-height: 1.2; opacity: .92; }
@@ -106,9 +111,21 @@ body { font-synthesis: none; }
 .prog i { display: block; flex: 1; background: var(--c0, rgba(255,255,255,.25)); }
 .prog i.on { background: var(--c); }
 
-/* Общая чёрная обводка для гладких шрифтов; пиксельные стили переопределяют. */
-#ov.outline { paint-order: stroke fill; }
+/* Чёрная обводка текста: пиксельные — тень по 8 направлениям, гладкие — обводка букв.
+   Свойства наследуются, поэтому правило на корне стиля обводит всё его тексты. */
 #ov.outline .style-root.glow { text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+#ov.outline .style-root:not(.pixel) { -webkit-text-stroke: 1.5px #000; paint-order: stroke fill; }
+#ov.outline .style-root.pixel {
+  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
+    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
+}
+/* Тонкий тёмный контур у блоков: обложка, визуализатор, шкала прогресса. */
+#ov.outline .style-root .cover-slot,
+#ov.outline .style-root [data-role="viz"],
+#ov.outline .style-root [data-role="prog"] {
+  outline: 1px solid rgba(0,0,0,.72);
+  outline-offset: 1px;
+}
 
 /* Тишина: оверлей остаётся в кадре, но пустой. */
 #idle {
@@ -138,8 +155,4 @@ body.idle #ov { display: none; }
 #ov.motion-hidden { visibility: hidden; }
 #ov.motion-in { visibility: visible; }
 
-/* Пиксельная обводка (8 теней) — только для пиксельных стилей. */
-#ov.outline .style-root.pixel {
-  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
-    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
-}
+
