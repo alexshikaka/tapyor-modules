@@ -27,7 +27,7 @@ const DEFAULTS = Object.freeze({
   pos: 'br',          // первая буква — верх/низ (t/b), вторая — лево/центр/право (l/c/r)
   dx: 0,              // сдвиг от угла, px экрана 1920×1080
   dy: 0,
-  size: 100,          // %, 80–150
+  size: 100,          // %, 80–250
   color: '#FFB000',   // цвет текста
   vizColor: '#FFB000', // цвет визуализатора
   outline: true,      // чёрная пиксельная обводка
@@ -71,7 +71,7 @@ function normMotion(raw, base) {
   if (POSITIONS.includes(r.pos)) out.pos = r.pos;
   out.dx = clampNum(r.dx, -900, 900, out.dx);
   out.dy = clampNum(r.dy, -500, 500, out.dy);
-  out.size = clampNum(r.size, 80, 150, out.size);
+  out.size = clampNum(r.size, 80, 250, out.size);
   out.color = normColor(r.color, out.color);
   out.vizColor = normColor(r.vizColor, out.vizColor);
   out.outline = typeof r.outline === 'boolean' ? r.outline : out.outline;
@@ -90,7 +90,7 @@ function normalize(raw) {
   if (POSITIONS.includes(r.pos)) out.pos = r.pos;
   out.dx = clampNum(r.dx, -900, 900, DEFAULTS.dx);
   out.dy = clampNum(r.dy, -500, 500, DEFAULTS.dy);
-  out.size = clampNum(r.size, 80, 150, DEFAULTS.size);
+  out.size = clampNum(r.size, 80, 250, DEFAULTS.size);
   out.color = normColor(r.color, DEFAULTS.color);
   out.vizColor = normColor(r.vizColor, out.color);
   out.count = clampNum(r.count, 0, MAX_COUNT, DEFAULTS.count);

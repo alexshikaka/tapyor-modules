@@ -88,6 +88,23 @@ test('OV3: демо-переопределения feat понимают 0/1, ч
   assert.deepEqual(Demo.options('?demo=1&style=card&feat=prog:0').feat, { prog: false });
 });
 
+test('OV3: размер 80–250 у плейлиста и у моушна', () => {
+  const { normalize, DEFAULTS } = require('../src/settings');
+  assert.equal(DEFAULTS.size, 100);
+  assert.equal(DEFAULTS.motion.size, 100);
+  assert.equal(normalize({ size: 80 }).size, 80);
+  assert.equal(normalize({ size: 250 }).size, 250);
+  assert.equal(normalize({ size: 79 }).size, 80);
+  assert.equal(normalize({ size: 251 }).size, 250);
+  assert.equal(normalize({ size: '200' }).size, 200);
+  assert.equal(normalize({ size: 'x' }).size, 100);
+  assert.equal(normalize({ motion: { size: 80 } }).motion.size, 80);
+  assert.equal(normalize({ motion: { size: 250 } }).motion.size, 250);
+  assert.equal(normalize({ motion: { size: 79 } }).motion.size, 80);
+  assert.equal(normalize({ motion: { size: 251 } }).motion.size, 250);
+  assert.equal(normalize({ motion: { size: 300 } }).motion.size, 250);
+});
+
 test('OV3: особые ключи только там, где элементы реально есть', () => {
   const withKey = (k) => STYLE_DEFS.filter((s) => s.features.includes(k)).map((s) => s.id);
   assert.deepEqual(withKey('spin'), ['dos']);
