@@ -12,5 +12,5 @@
 [data-style="citypop"] .vz-bw{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%}
 [data-style="citypop"][data-h="r"] .vz-bw{align-items:flex-end}
 [data-style="citypop"][data-h="c"] .vz-bw{align-items:center}
-[data-style="citypop"] .vz-bw i{height:3px;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="citypop"] .vz-bw i{height:3px;background:var(--v)}
 [data-style="citypop"] .queue{font-size:18px}

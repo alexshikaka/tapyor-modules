@@ -5,7 +5,7 @@
 [data-style="vinyl"] .viz-r{position:absolute;inset:0}
 [data-style="vinyl"] .vz-r{position:absolute;inset:0}
 [data-style="vinyl"] .ring-arm{position:absolute;left:50%;top:50%;width:0;height:0;transform-origin:0 0}
-[data-style="vinyl"] .ring-bar{position:absolute;left:-1.5px;bottom:34px;width:3px;height:16px;background:var(--v);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="vinyl"] .ring-bar{position:absolute;left:-1.5px;bottom:34px;width:3px;height:16px;background:var(--v)}
 [data-style="vinyl"] .textcol{flex:1 1 auto}
 [data-style="vinyl"] .title{font-size:26px;line-height:1.1}
 [data-style="vinyl"] .artist{font-size:19px;color:var(--c2);margin-bottom:4px}

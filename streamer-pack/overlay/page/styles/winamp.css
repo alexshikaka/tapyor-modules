@@ -5,7 +5,7 @@
 [data-style="winamp"] .viz-g{flex:1;min-width:24px;height:24px}
 [data-style="winamp"] .vz-g{display:flex;gap:2px;height:100%}
 [data-style="winamp"] .led-col{flex:1;display:flex;flex-direction:column-reverse;gap:2px}
-[data-style="winamp"] .led{height:4px;background:transparent;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="winamp"] .led{height:4px;background:transparent}
 [data-style="winamp"] .led.on{background:var(--v)}
 [data-style="winamp"] .led-col:nth-child(2n) .led.on{background:var(--a3)}
 [data-style="winamp"] .led-col:nth-child(4n) .led.on{background:var(--a4)}

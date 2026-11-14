@@ -7,5 +7,5 @@
 [data-style="paper"] .artist{font-size:19px;font-style:italic}
 [data-style="paper"] .viz-b{height:14px;margin-bottom:6px}
 [data-style="paper"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
-[data-style="paper"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="paper"] .vz-b i{flex:1;background:var(--v)}
 [data-style="paper"] .queue{border-top:1px solid var(--c);padding-top:4px;font-size:17px}

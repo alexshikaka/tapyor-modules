@@ -9,5 +9,5 @@
 [data-style="polaroid"] .who{color:var(--v)}
 [data-style="polaroid"] .viz-b{height:20px;margin-top:4px}
 [data-style="polaroid"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
-[data-style="polaroid"] .vz-b i{flex:1;background:var(--v);border-radius:3px;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="polaroid"] .vz-b i{flex:1;background:var(--v);border-radius:3px}
 [data-style="polaroid"] .queue{margin-top:6px;font-size:22px}

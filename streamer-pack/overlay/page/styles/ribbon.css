@@ -7,7 +7,7 @@
 [data-style="ribbon"] .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 [data-style="ribbon"] .viz-b{flex:1;min-width:0;height:30px}
 [data-style="ribbon"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
-[data-style="ribbon"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="ribbon"] .vz-b i{flex:1;background:var(--v)}
 [data-style="ribbon"] .queue{flex-direction:row;gap:18px;margin-top:6px;font-size:20px;overflow:hidden}
 /* Чипы делят ширину ленты: длинная строка ужимается и режется справа многоточием,
    начало каждой строки остаётся видимым (раньше длинная выталкивала соседние за край). */

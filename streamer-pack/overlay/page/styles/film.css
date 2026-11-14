@@ -7,5 +7,5 @@
 [data-style="film"] .time{font-size:20px;color:var(--a2);margin-left:.3em}
 [data-style="film"] .viz-b{height:14px;margin:6px 0}
 [data-style="film"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
-[data-style="film"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="film"] .vz-b i{flex:1;background:var(--v)}
 [data-style="film"] .queue{font-size:20px}

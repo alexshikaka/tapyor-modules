@@ -716,7 +716,7 @@ if (shots || outlineMode) fs.mkdirSync(shotsDir, { recursive: true });
 
 // ---------- режим --outline: обводка вкл/выкл у каждого стиля + снимки на светлом фоне ----------
 if (outlineMode) {
-  let oTotal = 0, oBad = 0;
+  let oTotal = 0, oBad = 0, oViz = 0;
   const oFailures = [];
   const bgAlpha = (c) => {
     if (!c || c === 'transparent') return 0;
@@ -743,9 +743,27 @@ if (outlineMode) {
       const y = Math.max(0, Math.floor(R.top - 90));
       const r = Math.min(1920, Math.ceil(R.right + 90));
       const b = Math.min(1080, Math.ceil(R.bottom + 90));
+      // OV6: у визуализатора не должно быть ни рамки, ни тени, ни штриха — даже при «Чёрной обводке».
+      const vizBad = [];
+      for (const el of root.querySelectorAll('[data-role="viz"], [data-role="viz"] *')) {
+        const s = getComputedStyle(el);
+        const border = ['Top', 'Right', 'Bottom', 'Left'].map((side) => ({
+          w: s['border' + side + 'Width'], c: s['border' + side + 'Color']
+        })).filter((bb) => (parseFloat(bb.w) || 0) > 0 && /rgba?\(0,\s*0,\s*0/.test(bb.c));
+        const bad = s.boxShadow !== 'none' || s.textShadow !== 'none' || s.filter !== 'none'
+          || (s.outlineStyle !== 'none' && (parseFloat(s.outlineWidth) || 0) > 0)
+          || (parseFloat(s.webkitTextStrokeWidth) || 0) > 0 || border.length > 0;
+        if (bad) {
+          vizBad.push({
+            cls: String(el.className || el.tagName), boxShadow: s.boxShadow, textShadow: s.textShadow,
+            filter: s.filter, outline: s.outlineStyle + ' ' + s.outlineWidth,
+            stroke: s.webkitTextStrokeWidth, border: border.map((bb) => bb.w + ' ' + bb.c)
+          });
+        }
+      }
       return {
         stroke: cs.webkitTextStrokeWidth, shadow: cs.textShadow,
-        bg: getComputedStyle(root).backgroundColor,
+        bg: getComputedStyle(root).backgroundColor, vizBad, vizCount: root.querySelectorAll('[data-viz]').length,
         clip: { x, y, width: Math.max(1, r - x), height: Math.max(1, b - y) }
       };
     });
@@ -790,6 +808,7 @@ if (outlineMode) {
     const off = await grab(style, false);
     const on = await grab(style, true);
     oTotal++;
+    oViz += (off.info.vizCount || 0) + (on.info.vizCount || 0);
     const fail = (msg, extra) => { oBad++; oFailures.push({ style, msg, ...extra }); };
     if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
     if (off.info.error || on.info.error) { fail('нет названия для проверки обводки', { off: off.info, on: on.info }); continue; }
@@ -799,9 +818,13 @@ if (outlineMode) {
     if (so !== 0) fail('при выключенной обводке осталась обводка букв', { off: off.info.stroke });
     if (!(sn > 0 || (on.info.shadow !== 'none' && on.info.shadow !== off.info.shadow))) fail('при включённой обводке нет ни обводки, ни тени', { on: on.info });
     if (on.info.stroke === off.info.stroke && on.info.shadow === off.info.shadow) fail('вкл/выкл не меняет text-shadow и -webkit-text-stroke', { off: off.info, on: on.info });
+    // Визуализатор без обводки: проверяем и при выключенной, и при включённой «Чёрной обводке».
+    if (off.info.vizBad.length || on.info.vizBad.length) {
+      fail('у визуализатора осталась обводка/тень', { off: off.info.vizBad.slice(0, 4), on: on.info.vizBad.slice(0, 4) });
+    }
     if (off.png && on.png) await compose(def, on.info.clip, off.png, on.png);
   }
-  console.log(JSON.stringify({ mode: 'outline', total: oTotal, bad: oBad, shots: oTotal, failures: oFailures.slice(0, 40) }, null, 2));
+  console.log(JSON.stringify({ mode: 'outline', total: oTotal, vizChecked: oViz, bad: oBad, shots: oTotal, failures: oFailures.slice(0, 40) }, null, 2));
   await browser.close();
   server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });

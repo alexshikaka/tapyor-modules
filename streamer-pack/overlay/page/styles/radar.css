@@ -18,5 +18,5 @@
 [data-style="radar"] .time{font-size:19px;margin-left:.35em}
 [data-style="radar"] .viz-sp{height:16px;margin:4px 0}
 [data-style="radar"] .vz-sp{display:flex;align-items:flex-end;gap:2px;height:100%}
-[data-style="radar"] .vz-sp i{flex:1;background:var(--v);height:10%;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="radar"] .vz-sp i{flex:1;background:var(--v);height:10%}
 [data-style="radar"] .queue{font-size:18px}
