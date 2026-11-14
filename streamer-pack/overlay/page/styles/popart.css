@@ -1,1 +1,14 @@
-/* Стиль «Поп-арт комикс»: оформление добавляется на следующем шаге. */
+.style-root[data-style="popart"]{width:340px;font-family:"Dela Gothic One",sans-serif;color:var(--c);letter-spacing:1px}
+[data-style="popart"] .row{gap:16px;align-items:center}
+[data-style="popart"] .pop-star{position:relative;width:84px;height:84px;flex:none}
+[data-style="popart"] .pop-star-svg{position:absolute;left:-8px;top:-8px;width:100px;height:100px}
+[data-style="popart"] .cover-slot{position:absolute;left:10px;top:10px;width:64px;height:64px;transform:rotate(-5deg);border:3px solid #000;overflow:hidden}
+[data-style="popart"][data-h="r"] .cover-slot{transform:rotate(5deg)}
+[data-style="popart"] .textcol{flex:1 1 auto}
+[data-style="popart"] .title{font-size:33px;line-height:1;color:var(--a2)}
+[data-style="popart"] .artist{font-size:22px;color:var(--a3)}
+[data-style="popart"] .who{color:var(--a3)}
+[data-style="popart"] .viz-b{height:22px;margin:6px 0 4px}
+[data-style="popart"] .vz-b{display:flex;align-items:flex-end;gap:5px;height:100%}
+[data-style="popart"] .vz-b i{flex:1;background:var(--v);border:2px solid #000}
+[data-style="popart"] .queue{font-size:21px}

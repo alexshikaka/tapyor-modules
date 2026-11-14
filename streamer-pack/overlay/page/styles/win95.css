@@ -1,1 +1,16 @@
-/* Стиль «Windows 95»: оформление добавляется на следующем шаге. */
+.style-root[data-style="win95"]{width:340px;font:24px/1 "Pixelify Sans",monospace;color:var(--c)}
+[data-style="win95"] .row{gap:10px;align-items:center}
+[data-style="win95"] .cover-slot{width:64px;height:64px;border:3px solid;border-color:#fff #404040 #404040 #fff}
+[data-style="win95"] .textcol{flex:1 1 auto}
+[data-style="win95"] .title{font-size:32px}
+[data-style="win95"] .artist{color:var(--c2)}
+[data-style="win95"] .time{font-size:20px;color:var(--c2)}
+[data-style="win95"] .win95-sep{border-top:3px solid #fff;border-bottom:3px solid #808080;margin:6px 0}
+[data-style="win95"] .viz-g{height:16px;margin-bottom:4px}
+[data-style="win95"] .vz-g{display:flex;gap:2px;height:100%}
+[data-style="win95"] .led-col{flex:1;display:flex;flex-direction:column-reverse;gap:2px}
+[data-style="win95"] .led{height:4px;background:transparent;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="win95"] .led.on{background:var(--v)}
+[data-style="win95"] .led-col:nth-child(2n) .led.on{background:var(--a3)}
+[data-style="win95"] .led-col:nth-child(5n) .led.on{background:var(--a2)}
+[data-style="win95"] .queue{font-size:22px}

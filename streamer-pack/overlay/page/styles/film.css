@@ -1,1 +1,11 @@
-/* Стиль «Киноплёнка»: оформление добавляется на следующем шаге. */
+.style-root[data-style="film"]{width:340px;font-family:Oswald,sans-serif;color:var(--c);letter-spacing:1.5px}
+[data-style="film"] .row{display:flex;border-top:8px dashed var(--c);border-bottom:8px dashed var(--c);padding:4px 0;gap:12px;align-items:center}
+[data-style="film"] .cover-slot{width:84px;height:56px;border:2px solid var(--c);background:var(--bg)}
+[data-style="film"] .textcol{flex:1 1 auto}
+[data-style="film"] .title{font-size:30px;line-height:1}
+[data-style="film"] .artist{font-size:20px;color:var(--a2)}
+[data-style="film"] .time{font-size:20px;color:var(--a2);margin-left:.3em}
+[data-style="film"] .viz-b{height:14px;margin:6px 0}
+[data-style="film"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
+[data-style="film"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="film"] .queue{font-size:20px}

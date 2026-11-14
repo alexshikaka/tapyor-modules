@@ -1,1 +1,9 @@
-/* Стиль «Колонка»: оформление добавляется на следующем шаге. */
+.style-root[data-style="column"]{width:200px;font-family:Tektur,sans-serif;color:var(--c);font-weight:700}
+[data-style="column"] .cover-slot{width:100%;height:84px;border:2px solid var(--a2);margin-bottom:6px}
+[data-style="column"] .title{font-size:26px;line-height:1.05}
+[data-style="column"] .artist{font-size:19px;color:var(--v)}
+[data-style="column"] .who{color:var(--v)}
+[data-style="column"] .viz-w{height:26px;margin:4px 0}
+[data-style="column"] canvas{width:100%;height:26px}
+[data-style="column"] .queue{font-size:19px}
+[data-style="column"] .queue .q-who{color:var(--a2)}

@@ -1,1 +1,13 @@
-/* Стиль «Синтвейв»: оформление добавляется на следующем шаге. */
+.style-root[data-style="synth"]{width:340px;font-family:"Russo One",sans-serif;color:var(--c);font-style:italic}
+[data-style="synth"] .row{gap:14px;align-items:center}
+[data-style="synth"] .cover-slot{width:64px;height:64px;transform:skewX(-8deg);background:var(--bg)}
+[data-style="synth"][data-h="r"] .cover-slot{transform:skewX(8deg)}
+[data-style="synth"] .textcol{flex:1 1 auto}
+[data-style="synth"] .title{font-size:34px;line-height:1;text-shadow:3px 0 var(--v),-3px 0 var(--a2)}
+[data-style="synth"] .artist{font-size:20px;color:var(--c2)}
+[data-style="synth"] .who{color:var(--c2)}
+[data-style="synth"] .viz-b{height:22px;margin:6px 0;transform:skewX(-20deg);transform-origin:bottom}
+[data-style="synth"][data-h="r"] .viz-b{transform:skewX(20deg)}
+[data-style="synth"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
+[data-style="synth"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="synth"] .queue{border-top:3px solid var(--a2);padding-top:4px;font-size:19px}

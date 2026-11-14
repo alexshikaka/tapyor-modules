@@ -1,1 +1,16 @@
-/* Стиль «Сити-поп»: оформление добавляется на следующем шаге. */
+.style-root[data-style="citypop"]{width:320px;display:flex;gap:12px;font-family:"Noto Serif JP",serif;color:var(--c);font-weight:700}
+[data-style="citypop"] .city-label{writing-mode:vertical-rl;font-size:22px;letter-spacing:4px;color:var(--v);flex:none;border-left:3px solid var(--v);padding-left:6px}
+[data-style="citypop"][data-h="r"] .city-label{border-left:0;border-right:3px solid var(--v);padding-left:0;padding-right:6px}
+[data-style="citypop"] .city-body{flex:1;min-width:0}
+[data-style="citypop"] .row{gap:10px;align-items:center}
+[data-style="citypop"] .cover-slot{width:60px;height:60px;border-radius:50%;border:3px solid var(--c);background:var(--a3)}
+[data-style="citypop"] .textcol{flex:1 1 auto}
+[data-style="citypop"] .title{font-size:27px;line-height:1.05}
+[data-style="citypop"] .artist{font-size:19px;color:var(--c2)}
+[data-style="citypop"] .who{color:var(--c2)}
+[data-style="citypop"] .viz-bw{margin:8px 0}
+[data-style="citypop"] .vz-bw{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%}
+[data-style="citypop"][data-h="r"] .vz-bw{align-items:flex-end}
+[data-style="citypop"][data-h="c"] .vz-bw{align-items:center}
+[data-style="citypop"] .vz-bw i{height:3px;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="citypop"] .queue{font-size:18px}
