@@ -1,1 +1,10 @@
-/* Стиль «Типографика»: оформление добавляется на следующем шаге. */
+.style-root[data-style="typography"]{width:340px;font-family:Manrope,Onest,sans-serif;color:var(--c);font-weight:800}
+[data-style="typography"] .row{gap:10px;align-items:center}
+[data-style="typography"] .cover-slot{width:48px;height:48px;border-radius:50%;background:color-mix(in srgb,var(--c) 22%,#111)}
+[data-style="typography"] .textcol{flex:1 1 auto}
+[data-style="typography"] .title{font-size:34px;line-height:1;font-weight:800;letter-spacing:-.035em}
+[data-style="typography"] .artist{font-size:19px;font-weight:700;opacity:.9}
+[data-style="typography"] .viz-b{height:18px;margin:6px 0;border-top:1px solid color-mix(in srgb,var(--c) 55%,transparent);padding-top:4px}
+[data-style="typography"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
+[data-style="typography"] .vz-b i{flex:1;background:var(--v);border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="typography"] .queue{font-size:19px;font-weight:600;line-height:1.35}
