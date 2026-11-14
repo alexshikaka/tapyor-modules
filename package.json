@@ -10,7 +10,9 @@
   },
   "scripts": {
     "test": "node --test streamer-pack/*/tests/*.test.js",
-    "check:overlays": "node tools/check-overlays.mjs"
+    "check:overlays": "node tools/check-overlays.mjs",
+    "check:overlays:features": "node tools/check-overlays.mjs --features=1",
+    "check:overlays:outline": "node tools/check-overlays.mjs --outline=1"
   },
   "devDependencies": {
     "playwright": "^1.65.1"
