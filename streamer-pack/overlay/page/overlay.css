@@ -64,6 +64,14 @@ body { font-synthesis: none; }
     radial-gradient(circle at 50% 50%, var(--c2, var(--c)) 0 10%, transparent 11%),
     repeating-radial-gradient(circle at 50% 50%, var(--cover-bg, #111) 0 3px, var(--c3, #333) 4px 5px);
 }
+/* Пиксельные стили: заглушка — пластинка 16×16, как обложка в DOS. */
+#ov .style-root.pixel .cover-fallback {
+  background:
+    linear-gradient(var(--c), var(--c)) 50% 50% / 12.5% 12.5% no-repeat,
+    radial-gradient(circle at 50% 50%, var(--c) 0 12%, transparent 13%),
+    repeating-conic-gradient(var(--c) 0 12deg, var(--cover-bg, #111) 12deg 24deg);
+}
+#ov .style-root.mono-cover .cover-fallback { filter: grayscale(1) contrast(1.6); }
 .cover-slot .cover-img { object-fit: cover; }
 .cover-slot.has-cover .cover-fallback { display: none; }
 .cover-slot canvas { image-rendering: auto; }
