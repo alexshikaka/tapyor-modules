@@ -1,0 +1,13 @@
+.style-root[data-style="polaroid"]{width:330px;font-family:Caveat,cursive;color:var(--c);font-weight:700}
+[data-style="polaroid"] .row{gap:16px;align-items:center}
+[data-style="polaroid"] .polaroid-frame{width:84px;padding:5px 5px 18px;background:#fff;transform:rotate(-5deg);flex:none}
+[data-style="polaroid"][data-h="r"] .polaroid-frame{transform:rotate(5deg)}
+[data-style="polaroid"] .cover-slot{height:74px}
+[data-style="polaroid"] .textcol{flex:1 1 auto}
+[data-style="polaroid"] .title{font-size:34px;line-height:1}
+[data-style="polaroid"] .artist{font-size:24px;color:var(--v)}
+[data-style="polaroid"] .who{color:var(--v)}
+[data-style="polaroid"] .viz-b{height:20px;margin-top:4px}
+[data-style="polaroid"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
+[data-style="polaroid"] .vz-b i{flex:1;background:var(--v);border-radius:3px;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="polaroid"] .queue{margin-top:6px;font-size:22px}

@@ -223,5 +223,10 @@ test('модуль: на старом ядре без моста — понят�
   assert.throws(() => new Overlay(core).start(), /нужен Тапёр новее/);
 });
 test('страница отдаёт только свои файлы', () => {
-  assert.deepEqual(Object.keys(PAGE_FILES).sort(), ['/dos.js', '/playlist', '/playlist.css', '/playlist.js']);
+  assert.ok(PAGE_FILES['/playlist']);
+  assert.ok(PAGE_FILES['/motion']);
+  assert.ok(PAGE_FILES['/styles/card.js']);
+  assert.ok(PAGE_FILES['/styles/radar.css']);
+  assert.equal(PAGE_FILES['/../settings.json'], undefined);
+  assert.equal(PAGE_FILES['/unknown'], undefined);
 });

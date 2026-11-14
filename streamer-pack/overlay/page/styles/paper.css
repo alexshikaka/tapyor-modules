@@ -1,0 +1,11 @@
+.style-root[data-style="paper"]{width:340px;font-family:"Playfair Display",serif;color:var(--c)}
+[data-style="paper"] .paper-mast{border-top:3px double var(--c);border-bottom:1px solid var(--c);font-size:15px;font-style:italic;text-align:center;padding:2px 0;font-weight:700}
+[data-style="paper"] .row{gap:12px;margin:8px 0;align-items:center}
+[data-style="paper"] .cover-slot{width:64px;height:64px;filter:grayscale(1)}
+[data-style="paper"] .textcol{flex:1 1 auto}
+[data-style="paper"] .title{font-size:29px;line-height:1}
+[data-style="paper"] .artist{font-size:19px;font-style:italic}
+[data-style="paper"] .viz-b{height:14px;margin-bottom:6px}
+[data-style="paper"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
+[data-style="paper"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="paper"] .queue{border-top:1px solid var(--c);padding-top:4px;font-size:17px}

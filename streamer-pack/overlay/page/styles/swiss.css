@@ -1,0 +1,9 @@
+.style-root[data-style="swiss"]{width:320px;font-family:"Golos Text",sans-serif;color:var(--c);font-weight:700}
+[data-style="swiss"] .row{border-top:5px solid var(--v);padding-top:8px;gap:12px}
+[data-style="swiss"] .cover-slot{width:64px;height:64px}
+[data-style="swiss"] .textcol{flex:1 1 auto}
+[data-style="swiss"] .title{font-size:30px;line-height:1;letter-spacing:-1px}
+[data-style="swiss"] .artist{font-size:19px;color:var(--c2)}
+[data-style="swiss"] .time{color:var(--c);margin-left:.35em}
+[data-style="swiss"] .queue{border-top:2px solid var(--c);margin-top:8px;padding-top:4px;font-size:18px}
+[data-style="swiss"] .queue .q-who{color:var(--c2)}

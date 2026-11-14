@@ -1,0 +1,15 @@
+.style-root[data-style="vtitle"]{width:300px;color:var(--c)}
+[data-style="vtitle"] .vtitle-main{display:flex;gap:12px;align-items:stretch}
+[data-style="vtitle"][data-h="r"] .vtitle-main{flex-direction:row-reverse;text-align:right}
+[data-style="vtitle"] .vtitle-title{writing-mode:vertical-rl;transform:rotate(180deg);font-family:Oswald,sans-serif;font-size:40px;line-height:1;color:var(--v);white-space:nowrap;max-height:100%;align-self:flex-start}
+[data-style="vtitle"] .vtitle-col{flex:1 1 auto;min-width:0;font-family:Manrope,sans-serif;font-weight:800}
+[data-style="vtitle"] .row{gap:10px;align-items:center}
+[data-style="vtitle"] .cover-slot{width:56px;height:56px}
+[data-style="vtitle"] .artist{font-size:24px}
+[data-style="vtitle"] .who{font-size:1em}
+[data-style="vtitle"] .viz-bw{margin:8px 0}
+[data-style="vtitle"] .vz-bw{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%}
+[data-style="vtitle"][data-h="r"] .vz-bw{align-items:flex-end}
+[data-style="vtitle"][data-h="c"] .vz-bw{align-items:center}
+[data-style="vtitle"] .vz-bw i{height:4px;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="vtitle"] .queue{font-size:19px}
