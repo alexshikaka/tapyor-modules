@@ -5,8 +5,8 @@
 [data-style="cassette"] .cassette-window{position:absolute;left:26px;top:35px;width:60px;height:30px;background:#fff;border:2px solid #000;overflow:hidden}
 [data-style="cassette"] .cassette-window .cover-slot{width:100%;height:100%}
 [data-style="cassette"] .cassette-spool{position:absolute;bottom:7px;width:14px;height:14px;border-radius:50%;background:#222}
-[data-style="cassette"] .cassette-spool:nth-of-type(2){left:22px}
-[data-style="cassette"] .cassette-spool:nth-of-type(3){right:22px}
+[data-style="cassette"] .cassette-spool:nth-child(3){left:22px}
+[data-style="cassette"] .cassette-spool:nth-child(4){right:22px}
 [data-style="cassette"] .textcol{flex:1 1 auto}
 [data-style="cassette"] .title{font-size:24px;line-height:1.05}
 [data-style="cassette"] .artist{font-size:19px;color:var(--v)}

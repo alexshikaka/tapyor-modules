@@ -10,6 +10,4 @@
 [data-style="blueprint"] .viz-w{height:26px;margin:6px 0}
 [data-style="blueprint"] canvas{width:100%;height:26px}
 [data-style="blueprint"] .queue{border-top:1px dashed var(--c);padding-top:4px}
-[data-style="blueprint"] .queue>div::before{content:"[" counter(qi) "] ";counter-increment:qi}
-[data-style="blueprint"] .queue{counter-reset:qi}
-[data-style="blueprint"] .queue>div::before{content:"[" attr(data-n) "] ";counter-increment:none}
+[data-style="blueprint"] .queue>div::before{content:"[" attr(data-n) "] "}
