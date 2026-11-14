@@ -34,6 +34,7 @@ const alignMode = args.get('align') === '1';
 const shiftMode = args.get('shift') === '1';
 const queueMode = args.get('queue') === '1';
 const motionMode = args.get('motion') === '1';
+const vizShotsMode = args.get('viz-shots') === '1';
 const shotDx = args.get('dx') || '0';
 const shotDy = args.get('dy') || '0';
 const shotSize = args.get('size') || '100';
@@ -726,7 +727,7 @@ const fontFailures = [];
 const gridShots = new Map();          // id стиля → PNG (br, плейлист, средний трек) для общей сетки
 let shotCount = 0;
 const shotsDir = path.join(root, '.dsh', 'shots');
-if (shots || outlineMode) fs.mkdirSync(shotsDir, { recursive: true });
+if (shots || outlineMode || vizShotsMode) fs.mkdirSync(shotsDir, { recursive: true });
 
 // ---------- режим --outline: обводка вкл/выкл у каждого стиля + снимки на светлом фоне ----------
 if (outlineMode) {
@@ -1041,6 +1042,73 @@ if (queueMode) {
   await browser.close(); server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
   process.exit(badCombos ? 1 : 0);
+}
+
+// ---------- режим --viz-shots: снимки «Волна»/«Спектр» по типу визуализатора и правые углы ----------
+if (vizShotsMode) {
+  // Один стиль каждого типа визуализатора из OVERLAYS-VIZ.md.
+  const BY_TYPE = [
+    ['sp', 'dos'], ['b', 'typography'], ['g', 'bigtype'], ['bw', 'vtitle'],
+    ['r', 'vinyl'], ['w', 'column'], ['nd', 'vu']
+  ];
+  const RIGHT_STYLES = ['dos', 'hud8', 'code', 'radar'];
+  const SPECTRUM = new Array(32).fill(0).map((_, i) => Math.round((0.15 + 0.8 * Math.abs(Math.sin(i * 0.42))) * 1000) / 1000);
+  let shotsDone = 0, shotBad = 0;
+  const shotFailures = [];
+  async function capture(name, url, motionPage) {
+    errors.length = 0;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForTimeout(420);
+    if (motionPage) {
+      await page.evaluate(() => {
+        const ov = document.getElementById('ov');
+        ov.classList.remove('motion-hidden');
+        ov.classList.add('motion-in');
+        ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+      });
+      await page.waitForTimeout(90);
+    }
+    await page.evaluate(async () => { if (document.fonts && document.fonts.ready) await document.fonts.ready; });
+    // Живой спектр: «Спектр» рисует полосы, «Волна» — свою форму.
+    fake.player.emit('level', 0.85);
+    fake.player.emit('spectrum', SPECTRUM);
+    await page.waitForTimeout(420);
+    const views = await page.evaluate(() => [...document.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || ''));
+    await page.evaluate(() => {
+      document.documentElement.style.background = '#151a22';
+      document.body.style.background = '#151a22';
+    });
+    await page.screenshot({ path: path.join(shotsDir, name) });
+    shotsDone++;
+    if (errors.length) {
+      shotBad++;
+      shotFailures.push({ name, errors: [...new Set(errors)] });
+    }
+    return views;
+  }
+  for (const [type, style] of BY_TYPE) {
+    for (const view of ['wave', 'spectrum']) {
+      const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${style}`
+        + `&pos=br&nick=1&track=medium&feat=viz:${view}`;
+      const views = await capture(`viz-${style}-${view}.png`, url, false);
+      if (!views.length || views.some((v) => v !== view)) {
+        shotBad++;
+        shotFailures.push({ name: `viz-${style}-${view}.png`, type, views });
+      }
+    }
+  }
+  // OV6 §3: DOS, 8-бит HUD, Код и Радар в правом нижнем углу — лента и шкала не зеркалятся.
+  for (const style of RIGHT_STYLES) {
+    for (const p of ['playlist', 'motion']) {
+      const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${style}`
+        + `&pos=br&nick=1&track=medium`;
+      await capture(`br-${p}-${style}.png`, url, p === 'motion');
+    }
+  }
+  console.log(JSON.stringify({ mode: 'viz-shots', shots: shotsDone, bad: shotBad, failures: shotFailures.slice(0, 20) }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(shotBad ? 1 : 0);
 }
 
 // ---------- режим --motion: каждая настройка моушна реально меняет страницу ----------
