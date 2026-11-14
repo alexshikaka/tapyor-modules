@@ -43,6 +43,23 @@ body { font-synthesis: none; }
 .style-root[data-h="r"] .row { flex-direction: row-reverse; }
 .style-root[data-h="c"] .row { justify-content: center; }
 .style-root[data-h="r"] .vu-head { flex-direction: row-reverse; }
+/* №13, №22, №27: исполнитель и время стоят одной строкой, как в макете. */
+.style-root[data-style="swiss"] .artist,
+.style-root[data-style="film"] .artist,
+.style-root[data-style="radar"] .artist,
+.style-root[data-style="swiss"] .time,
+.style-root[data-style="film"] .time,
+.style-root[data-style="radar"] .time { display: inline; }
+/* Строка «исполнитель + стрелки VU» тоже зеркалится: стрелки у дальнего края. */
+.style-root[data-h="r"] .vu-line { flex-direction: row-reverse; }
+/* Столбики, сегменты и лента растут от правого края; шкала прогресса тоже. */
+.style-root[data-h="r"] .vz-b,
+.style-root[data-h="r"] .vz-sp,
+.style-root[data-h="r"] .vz-g { flex-direction: row-reverse; }
+.style-root[data-h="r"] .prog { flex-direction: row-reverse; }
+/* Горизонтальная очередь-лента: справа чипы идут от правого края, по центру — по центру. */
+.style-root[data-h="r"] .ribbon-queue { flex-direction: row-reverse; }
+.style-root[data-h="c"] .ribbon-queue { justify-content: center; }
 .style-root[data-h="r"][data-style="citypop"] { flex-direction: row-reverse; }
 .style-root[data-v="b"][data-nr="1"] { flex-direction: column; }
 
@@ -92,8 +109,12 @@ body { font-synthesis: none; }
 .title { white-space: nowrap; }
 .artist, .who { white-space: nowrap; }
 .who { font-size: .8em; line-height: 1.2; opacity: .92; }
-.queue { min-width: 0; display: flex; flex-direction: column; }
-.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+/* Очередь режется по своему краю, а строка прижата к домашнему краю:
+   короткая — к краю очереди, длинная уходит за противоположный край и обрезается. */
+.queue { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: max-content; max-width: none; align-self: flex-start; }
+.style-root[data-h="r"] .queue > div { align-self: flex-end; }
+.style-root[data-h="c"] .queue > div { align-self: center; }
 .queue .q-who { opacity: .72; }
 .style-root[data-v="b"] .queue { flex-direction: column-reverse; }
 .style-root[data-nr="1"] .queue { flex-direction: column; }

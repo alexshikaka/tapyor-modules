@@ -29,6 +29,13 @@ const tracks = (args.get('tracks') || 'normal,medium,long').split(',');
 const shots = args.get('shots') === '1';
 const featuresMode = args.get('features') === '1';
 const outlineMode = args.get('outline') === '1';
+const alignMode = args.get('align') === '1';
+const shiftMode = args.get('shift') === '1';
+const shotDx = args.get('dx') || '0';
+const shotDy = args.get('dy') || '0';
+const shotSize = args.get('size') || '100';
+const shotSuffix = (shotDx !== '0' || shotDy !== '0' || shotSize !== '100')
+  ? `-d${shotDx}_${shotDy}-s${shotSize}` : '';
 const coreDir = args.get('core') || process.env.TAPYOR_PLAYER || 'E:\\Tapyor\\Tapyor-player';
 
 // ---------- шрифты ядра: только чтение, копия во временную папку проверки ----------
@@ -228,6 +235,221 @@ const measured = await page.addInitScript(() => {
         mq: title.querySelectorAll('.mq,.mqv').length
       } : null
     };
+  };
+  // Раскладка в координатах оверлея (до transform: scale) — для матрицы сдвигов и размеров.
+  window.__ovLayout = () => {
+    const root = document.querySelector('.style-root');
+    const ov = document.getElementById('ov');
+    if (!root || !ov) return { error: 'нет .style-root' };
+    const R = root.getBoundingClientRect();
+    const s = R.width / (root.offsetWidth || 1) || 1;
+    const loc = (r) => ({
+      l: +((r.left - R.left) / s).toFixed(2), t: +((r.top - R.top) / s).toFixed(2),
+      r: +((r.right - R.left) / s).toFixed(2), b: +((r.bottom - R.top) / s).toFixed(2)
+    });
+    const box = (el) => {
+      if (!el || el.hidden || !el.offsetParent) return null;
+      const r = el.getBoundingClientRect();
+      return r.width || r.height ? loc(r) : null;
+    };
+    const total = {};
+    for (const role of ['cover', 'title', 'artist', 'who', 'time', 'queue', 'prog']) {
+      total[role] = box(root.querySelector('[data-role="' + role + '"]'));
+    }
+    const viz = [...root.querySelectorAll('[data-role="viz"]')].map(box).filter(Boolean);
+    const q = root.querySelector('[data-role="queue"]');
+    const rows = q ? [...q.children].map(box).filter(Boolean) : [];
+    const qfd = q ? getComputedStyle(q).flexDirection : '';
+    const t = root.querySelector('[data-role="title"]');
+    const titleInfo = t ? {
+      mq: !!t.querySelector('.mq, .mqv'),
+      cw: t.clientWidth, sw: t.scrollWidth, ch: t.clientHeight, sh: t.scrollHeight
+    } : null;
+    // Наезды текста на обложку и визуализатор — тем же способом, что и в общем прогоне.
+    let overlaps = [];
+    try { overlaps = (window.__ovCheck() || {}).overlaps || []; } catch (e) { overlaps = ['check: ' + e.message]; }
+    return { style: root.dataset.style, scale: s, boxes: total, viz, rows, qfd, titleInfo, overlaps };
+  };
+  // должен совпадать с краем своей колонки (±2 px): справа — правым, слева — левым,
+  // по центру — серединами. №18 «Код» — исключение: строки не переворачиваются, всё влево.
+  window.__ovAlign = () => {
+    const root = document.querySelector('.style-root');
+    const ov = document.getElementById('ov');
+    if (!root || !ov) return { error: 'нет .style-root' };
+    const h = ov.dataset.h || 'r';
+    const style = root.dataset.style;
+    const EPS = 2.5;
+    const vis = (el) => {
+      if (!el || el.hidden || !el.offsetParent) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    };
+    const content = (el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const l = r.left + (parseFloat(cs.paddingLeft) || 0);
+      const rr = r.right - (parseFloat(cs.paddingRight) || 0);
+      return { l, r: rr, mid: (l + rr) / 2 };
+    };
+    const ink = (el) => {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const r = range.getBoundingClientRect();
+        if (!r.width) return null;
+        return { l: r.left, r: r.right, mid: (r.left + r.right) / 2 };
+      } catch (e) { return null; }
+    };
+    // У подписей-псевдоэлементов (TRACK:, [1], FIG.1) range их не видит:
+    // тогда меряем коробку строки целиком.
+    const hasPseudo = (el) => {
+      for (const pe of ['::before', '::after']) {
+        const c = getComputedStyle(el, pe).content;
+        if (c && c !== 'none' && c !== 'normal') return true;
+      }
+      return false;
+    };
+    const textRect = (el) => {
+      if (hasPseudo(el)) {
+        const r = el.getBoundingClientRect();
+        return { l: r.left, r: r.right, mid: (r.left + r.right) / 2 };
+      }
+      return ink(el);
+    };
+    const target = (c) => (h === 'r' ? c.r : h === 'l' ? c.l : c.mid);
+    const got = (ir) => (h === 'r' ? ir.r : h === 'l' ? ir.l : ir.mid);
+    const entry = (role, c, ir, extra) => {
+      const e = target(c), g = got(ir);
+      return Object.assign({ role, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= EPS }, extra || {});
+    };
+    if (style === 'code') {
+      // Исключение: ни одна строка не перевёрнута, текст прижат влево.
+      const ta = getComputedStyle(root).textAlign;
+      const head = root.querySelector('.code-head');
+      const dir = head ? getComputedStyle(head).flexDirection : '';
+      return { style, h, code: { textAlign: ta, headDirection: dir, ok: ta === 'left' && dir !== 'row-reverse' }, texts: [], queue: null, viz: [], prog: null };
+    }
+    const texts = [];
+    // №13/№22/№27: исполнитель и время — одна строка, проверяем её край целиком.
+    const artistEl = root.querySelector('[data-role="artist"]');
+    const timeEl = root.querySelector('[data-role="time"]');
+    const pair = new Set();
+    if (artistEl && timeEl && artistEl.nextElementSibling === timeEl
+      && getComputedStyle(artistEl).display.indexOf('inline') === 0
+      && getComputedStyle(timeEl).display.indexOf('inline') === 0) {
+      pair.add('artist').add('time');
+    }
+    for (const role of ['title', 'artist', 'who', 'time']) {
+      const el = root.querySelector('[data-role="' + role + '"]');
+      if (!vis(el)) continue;
+      if (el.querySelector('.mq, .mqv')) continue;   // бегущая строка: край гуляет по замыслу
+      if (pair.has(role)) {
+        if (role === 'artist') {
+          let cont = null, p = el.parentElement;
+          while (p && p !== root) {
+            if (/(^|\s)(textcol|vu-text|city-body|vtitle-col)(\s|$)/.test(p.className)) { cont = p; break; }
+            p = p.parentElement;
+          }
+          if (!cont) cont = root;
+          const a = textRect(el), t = textRect(timeEl);
+          if (a && t) texts.push(entry('artist+time', content(cont), { l: a.l, r: t.r, mid: (a.l + t.r) / 2 }));
+        }
+        continue;
+      }
+      // Время, стоящее в одной строке после исполнителя (№13, №22, №26, №27), — часть
+      // строки исполнителя, а не отдельная колонка: его левый край не обязан быть крайним.
+      const tcs = getComputedStyle(el);
+      if (role === 'time' && el.previousElementSibling && tcs.display.indexOf('inline') === 0) continue;
+      if (role === 'title' && style === 'vtitle') {
+        // Вертикальное название: прижато к своему краю оверлея, по центру не проверяем.
+        if (h === 'c') continue;
+        const r = el.getBoundingClientRect();
+        const e = h === 'r' ? root.getBoundingClientRect().right : root.getBoundingClientRect().left;
+        const g = h === 'r' ? r.right : r.left;
+        texts.push({ role, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= 3, vertical: true });
+        continue;
+      }
+      const ir = textRect(el);
+      if (!ir) continue;
+      let cont = null;
+      const par = el.parentElement;
+      const pcs = par ? getComputedStyle(par) : null;
+      if (role === 'title' && /(^|\s)vu-title(\s|$)/.test(el.className)) cont = el;
+      else if (pcs && pcs.display.indexOf('flex') >= 0 && pcs.flexDirection.indexOf('row') === 0) cont = el;
+      else {
+        let p = el.parentElement;
+        while (p && p !== root) {
+          if (/(^|\s)(textcol|vu-text|city-body|vtitle-col)(\s|$)/.test(p.className)) { cont = p; break; }
+          p = p.parentElement;
+        }
+        if (!cont) cont = root;
+      }
+      texts.push(entry(role, content(cont), ir));
+    }
+    // Очередь: строки (снизу над треком, сверху под ним) и горизонтальная лента чипов.
+    let queue = null;
+    const q = root.querySelector('[data-role="queue"]');
+    if (vis(q) && q.children.length) {
+      const c = content(q);
+      const rows = [...q.children].filter(vis);
+      const horizontal = /row/.test(getComputedStyle(q).flexDirection);
+      if (horizontal) {
+        const rs = rows.map((r) => r.getBoundingClientRect());
+        const u = { l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)) };
+        u.mid = (u.l + u.r) / 2;
+        queue = entry('queue', c, u, { horizontal: true, rows: rows.length });
+      } else {
+        const list = rows.map((r, i) => {
+          const ir = textRect(r);
+          return ir ? Object.assign(entry('queue' + (i + 1), c, ir), { text: r.textContent.slice(0, 40) }) : null;
+        }).filter(Boolean);
+        queue = { rows: list.length, bad: list.filter((x) => !x.ok).length, list: list.filter((x) => !x.ok).slice(0, 4) };
+      }
+    }
+    // Визуализатор: столбики/сегменты/полосы растут от нужного края.
+    const viz = [];
+    for (const box of [...root.querySelectorAll('[data-role="viz"]')]) {
+      if (!vis(box)) continue;
+      for (const z of [...box.querySelectorAll('[data-viz]')]) {
+        if (!vis(z)) continue;
+        const kind = z.dataset.viz;
+        const c = content(z);
+        const kids = [...z.children].filter((k) => k.getBoundingClientRect().width > 0);
+        if (!kids.length) continue;
+        if (kind === 'nd') {
+          // Стрелки VU — у дальнего края: справа это левый край, слева — правый.
+          const r = box.getBoundingClientRect();
+          const rr = root.getBoundingClientRect();
+          const e = h === 'r' ? rr.left : h === 'l' ? rr.right : null;
+          if (e == null) continue;
+          const g = h === 'r' ? r.left : r.right;
+          viz.push({ kind, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= 3, far: true });
+          continue;
+        }
+        if (kind === 'w') continue;   // волна занимает всю ширину
+        // Столбики и лента на всю ширину: по центру у них нет своего края,
+        // центрируется сама коробка оверлея.
+        if (h === 'c' && (kind === 'b' || kind === 'sp' || kind === 'g')) continue;
+        const check = kind === 'bw' ? kids : [kids[0]];
+        for (const k of check) {
+          const r = k.getBoundingClientRect();
+          const ir = { l: r.left, r: r.right, mid: (r.left + r.right) / 2 };
+          viz.push(Object.assign(entry(kind, c, ir), { kind }));
+          if (kind !== 'bw') break;
+        }
+      }
+    }
+    // Шкала прогресса: ячейки заполняются от края.
+    let prog = null;
+    const p = root.querySelector('[data-role="prog"]');
+    if (vis(p) && p.children.length && h !== 'c') {
+      const r = p.children[0].getBoundingClientRect();
+      prog = entry('prog', content(p), { l: r.left, r: r.right, mid: (r.left + r.right) / 2 });
+    }
+    const bad = texts.filter((x) => !x.ok).length
+      + (queue ? (queue.horizontal || queue.bad == null ? (queue.ok ? 0 : 1) : queue.bad) : 0)
+      + viz.filter((x) => !x.ok).length + (prog && !prog.ok ? 1 : 0);
+    return { style, h, bad, texts, queue, viz, prog };
   };
 });
 
@@ -457,11 +679,152 @@ if (outlineMode) {
   process.exit(oBad ? 1 : 0);
 }
 
+// ---------- режим --align: край текста/очереди/визуализатора у своего края колонки ----------
+if (alignMode) {
+  let combos = 0, checks = 0, badCombos = 0;
+  const alignFailures = [];
+  const addBad = (x) => (x.horizontal ? (x.ok ? 0 : 1) : x.bad || 0);
+  for (const p of pages) {
+    for (const style of styles) {
+      for (const pos of positions) {
+        errors.length = 0;
+        const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${encodeURIComponent(style)}`
+          + `&pos=${pos}&nick=1&track=${args.get('track') || 'normal'}`;
+        await page.goto(url, { waitUntil: 'load' });
+        await page.waitForTimeout(p === 'motion' ? 700 : 260);
+        if (p === 'motion') {
+          await page.evaluate(() => {
+            const ov = document.getElementById('ov');
+            if (!ov) return;
+            ov.classList.remove('motion-hidden');
+            ov.classList.add('motion-in');
+            ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+          });
+          await page.waitForTimeout(80);
+        }
+        const r = await page.evaluate(() => window.__ovAlign());
+        combos++;
+        if (r.error) { badCombos++; alignFailures.push({ p, style, pos, msg: r.error }); continue; }
+        if (errors.length) { badCombos++; alignFailures.push({ p, style, pos, errors: [...new Set(errors)] }); continue; }
+        if (r.code) {
+          checks++;
+          if (!r.code.ok) { badCombos++; alignFailures.push({ p, style, pos, code: r.code }); }
+          continue;
+        }
+        const textBad = r.texts.filter((x) => !x.ok);
+        const vizBad = r.viz.filter((x) => !x.ok);
+        const qBad = r.queue ? addBad(r.queue) : 0;
+        checks += r.texts.length + (r.queue ? (r.queue.horizontal ? 1 : r.queue.rows) : 0) + r.viz.length + (r.prog ? 1 : 0);
+        if (textBad.length || vizBad.length || qBad || (r.prog && !r.prog.ok)) {
+          badCombos++;
+          alignFailures.push({ p, style, pos, h: r.h, texts: textBad, queue: r.queue && (r.queue.horizontal ? (r.queue.ok ? null : r.queue) : r.queue.list), viz: vizBad, prog: r.prog && !r.prog.ok ? r.prog : null });
+        }
+        if (combos % 60 === 0) console.log('… align:', combos, 'сочетаний, плохих', badCombos);
+      }
+    }
+  }
+  console.log(JSON.stringify({
+    mode: 'align', combos, checks, badCombos, styles: styles.length, positions: positions.length, pages,
+    failures: alignFailures.slice(0, 80)
+  }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(badCombos ? 1 : 0);
+}
+
+// ---------- режим --shift: сдвиг и размер только переносят/масштабируют оверлей ----------
+if (shiftMode) {
+  const shifts = [[0, 0], [300, 200], [-300, -200], [900, 500], [-900, -500]];
+  const sizes = [80, 100, 250];
+  const shiftTrack = args.get('track') || 'normal';
+  const TOL = 1.01;
+  const same = (a, b) => {
+    if (!a || !b) return !a && !b;
+    return ['l', 't', 'r', 'b'].every((k) => Math.abs(a[k] - b[k]) <= TOL);
+  };
+  const diff = (ref, cur, path, out) => {
+    if (!same(ref, cur)) out.push({ path, ref, cur });
+  };
+  let total = 0, bad = 0, pageErrors = 0, clipBad = 0;
+  const failures = [];
+  async function loadShift(style, pos, p, dx, dy, size) {
+    errors.length = 0;
+    const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${encodeURIComponent(style)}`
+      + `&pos=${pos}&nick=1&track=${shiftTrack}&dx=${dx}&dy=${dy}&size=${size}`;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.evaluate(async () => { if (document.fonts && document.fonts.ready) await document.fonts.ready; });
+    await page.waitForTimeout(p === 'motion' ? 300 : 120);
+    if (p === 'motion') {
+      await page.evaluate(() => {
+        const ov = document.getElementById('ov');
+        if (!ov) return;
+        ov.classList.remove('motion-hidden');
+        ov.classList.add('motion-in');
+        ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+      });
+      await page.waitForTimeout(70);
+    }
+    return { r: await page.evaluate(() => window.__ovLayout()), errs: [...new Set(errors)] };
+  }
+  for (const p of pages) {
+    for (const style of styles) {
+      for (const pos of positions) {
+        const ref = await loadShift(style, pos, p, 0, 0, 100);
+        if (ref.r.error || ref.errs.length) {
+          total++; bad++; pageErrors += ref.errs.length;
+          failures.push({ p, style, pos, variant: 'ref', msg: ref.r.error, errs: ref.errs });
+          continue;
+        }
+        for (const [dx, dy] of shifts) {
+          for (const size of sizes) {
+            if (dx === 0 && dy === 0 && size === 100) continue;
+            const cur = await loadShift(style, pos, p, dx, dy, size);
+            total++;
+            if (cur.r.error || cur.errs.length) {
+              bad++; pageErrors += cur.errs.length;
+              failures.push({ p, style, pos, dx, dy, size, msg: cur.r.error, errs: cur.errs });
+              continue;
+            }
+            const d = [];
+            for (const role of ['cover', 'title', 'artist', 'who', 'queue', 'prog']) {
+              diff(ref.r.boxes[role], cur.r.boxes[role], role, d);
+            }
+            if (ref.r.viz.length !== cur.r.viz.length) d.push({ path: 'viz:len', ref: ref.r.viz.length, cur: cur.r.viz.length });
+            ref.r.viz.forEach((b, i) => diff(b, cur.r.viz[i], 'viz' + i, d));
+            if (ref.r.rows.length !== cur.r.rows.length) d.push({ path: 'rows:len', ref: ref.r.rows.length, cur: cur.r.rows.length });
+            ref.r.rows.forEach((b, i) => diff(b, cur.r.rows[i], 'row' + i, d));
+            if (ref.r.qfd !== cur.r.qfd) d.push({ path: 'queue:direction', ref: ref.r.qfd, cur: cur.r.qfd });
+            // №8: текст не обрезан — коробка названия не меньше текста (кроме бегущей строки).
+            let clip = null;
+            if (style === 'vtitle' && cur.r.titleInfo && !cur.r.titleInfo.mq) {
+              const ti = cur.r.titleInfo;
+              if (ti.sw > ti.cw + 1 || ti.sh > ti.ch + 1) { clip = ti; clipBad++; }
+            }
+            if (d.length || cur.r.overlaps.length || clip) {
+              bad++;
+              failures.push({ p, style, pos, dx, dy, size, layout: d.slice(0, 6), overlaps: cur.r.overlaps, clip });
+            }
+          }
+        }
+        if (total && total % 300 < 20) console.log('… shift:', total, 'вариантов, плохих', bad);
+      }
+    }
+  }
+  console.log(JSON.stringify({
+    mode: 'shift', track: shiftTrack, total, bad, pageErrors, clipBad,
+    shifts, sizes, styles: styles.length, positions: positions.length, pages,
+    failures: failures.slice(0, 60)
+  }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(bad ? 1 : 0);
+}
+
 for (const p of pages) {
   for (const style of styles) {
     for (const pos of positions) {
       for (const track of tracks) {
-        const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${encodeURIComponent(style)}&pos=${pos}&nick=1&track=${track}`;
+        const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${encodeURIComponent(style)}&pos=${pos}&nick=1&track=${track}&dx=${shotDx}&dy=${shotDy}&size=${shotSize}`;
         errors.length = 0;
         await page.goto(url, { waitUntil: 'load' });
         await page.waitForTimeout(p === 'motion' ? 1000 : 220);
@@ -502,7 +865,7 @@ for (const p of pages) {
           });
           const png = await page.screenshot();
           shotCount++;
-          fs.writeFileSync(path.join(shotsDir, `${p}-${style}-${pos}-${track}.png`), png);
+          fs.writeFileSync(path.join(shotsDir, `${p}-${style}-${pos}-${track}${shotSuffix}.png`), png);
           if (p === 'playlist' && pos === 'br' && track === 'medium') gridShots.set(style, png);
         }
         if ((total % 100) === 0) console.log('…', total, 'сочетаний, ошибок', bad);

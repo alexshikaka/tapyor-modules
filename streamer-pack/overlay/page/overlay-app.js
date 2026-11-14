@@ -360,6 +360,12 @@
     return h === 'r' ? 'L' : h === 'l' ? 'R' : 'B';
   }
 
+  // Домашний край текста: справа — правый, слева — левый, по центру — середина.
+  function homeAlign(cfg) {
+    var h = (cfg.pos || 'br')[1];
+    return h === 'l' ? 'left' : h === 'c' ? 'center' : 'right';
+  }
+
   function rootBox() { return S.root.getBoundingClientRect(); }
 
   // Координаты элемента внутри оверлея, до transform: scale. Сдвиг и размер сюда не входят.
@@ -372,6 +378,19 @@
     var b = localBox(el), ow = S.root.offsetWidth || 300;
     // Запас меряется только от края оверлея: положение на экране и сдвиг не участвуют.
     return T.titleReserve(dir, b.left, b.right, 0, ow, ow, need);
+  }
+
+  // По центру коробка названия растёт в обе стороны, но не залезает на обложку:
+  // запас ограничен удвоенным зазором до блока обложки.
+  function centerLimit(el, extra) {
+    var cap = S.root.offsetWidth || 300;
+    var cv = coverBlockEl();
+    if (cv && !cv.hidden && cv.offsetParent) {
+      var b = localBox(el), c = localBox(cv);
+      if (c.right <= b.left + 1) cap = Math.min(cap, 2 * Math.max(0, b.left - c.right));
+      else if (c.left >= b.right - 1) cap = Math.min(cap, 2 * Math.max(0, c.left - b.right));
+    }
+    return Math.min(extra, cap);
   }
 
   function resetText(el) {
@@ -416,6 +435,10 @@
     var colH = col ? col.offsetHeight : 0;
     t.style.display = was;
     var plan = T.verticalPlan(colH, t.scrollHeight, 300);
+    // Буквы вертикального шрифта шире строки (боковые выносы) — коробку расширяем,
+    // иначе владелец видит обрезанные сбоку буквы и обводку.
+    var tw = Math.max(t.clientWidth, t.scrollWidth);
+    if (tw > t.clientWidth) t.style.width = tw + 'px';
     if (!plan.run) return;                     // короткому высоту не задаём — стоит как в образце
     t.style.height = plan.height + 'px';
     t.style.overflow = 'hidden';
@@ -452,7 +475,14 @@
     var base = t.clientWidth;
     var need = Math.max(0, t.scrollWidth - base);
     if (need <= 0) return;
-    var dir = awayDir(t), extra = freeExtra(t, dir, need);
+    var dir = awayDir(t), extra;
+    if (homeAlign(cfg) === 'center') {
+      // По центру запас открывается в обе стороны — иначе середина строки уезжает.
+      dir = 'B';
+      extra = centerLimit(t, freeExtra(t, dir, need));
+    } else {
+      extra = freeExtra(t, dir, need);
+    }
     // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
     if (MOTION) extra = T.motionExtra(base, extra);
     if (extra > 0) {
@@ -461,7 +491,9 @@
       t.style.width = bx.width + 'px';
       if (bx.marginLeft) t.style.marginLeft = bx.marginLeft + 'px';
       if (bx.marginRight) t.style.marginRight = bx.marginRight + 'px';
-      t.style.textAlign = dir === 'L' ? 'right' : dir === 'B' ? 'center' : 'left';
+      // Домашний край не переставляем: коробка растёт в сторону от обложки,
+      // а текст остаётся прижат к своему краю (справа/слева/по центру).
+      t.style.textAlign = cfg.style === 'code' ? 'left' : homeAlign(cfg);
       S.root.querySelectorAll('.textcol, .title-line, .title-box').forEach(function (p) { p.style.overflow = 'visible'; });
     }
     if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) {
@@ -474,50 +506,54 @@
 
   function compactStyle(cfg) { return cfg.style === 'ribbon' || cfg.style === 'vu'; }
 
+  // Длинная строка не режется и не тащит за собой домашний край: коробка
+  // расширяется на вылет, а домашний край остаётся на месте (отрицательное поле).
+  function growLine(el, cfg) {
+    var spill = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (!spill) return;
+    var h = homeAlign(cfg);
+    el.style.width = 'max-content';
+    if (h === 'right') { el.style.marginLeft = (-spill) + 'px'; return; }
+    if (h === 'left') return;
+    // По центру: у обложки сбоку уходим в сторону от неё, иначе растём в обе стороны.
+    var dir = awayDir(el);
+    if (dir === 'L') el.style.marginLeft = (-spill) + 'px';
+    else if (dir === 'B') el.style.marginLeft = (-spill / 2) + 'px';
+  }
+
   function fitArtist(cfg) {
     var a = S.roles.artist; if (!a || !S.np || a.hidden) return;
-    if (cfg.style === 'winamp') return;
+    if (cfg.style === 'winamp' || cfg.style === 'code') return;
     resetText(a);
     a.textContent = S.np.artist || '';
-    var dir = awayDir(a);
     if (compactStyle(cfg)) {
+      // №7 лента и №20 VU: рядом визуализатор — длинный исполнитель бежит в своём месте.
       a.style.overflow = 'hidden';
       a.style.whiteSpace = 'nowrap';
       if (marqOn(cfg) && a.scrollWidth > a.clientWidth + 1) marquee(a, S.np.artist || '', true);
       return;
     }
+    // Обычные стили: текст целиком, длинный уходит к центру экрана и не режется.
     a.style.overflow = 'visible';
     a.style.whiteSpace = 'nowrap';
-    a.style.width = 'max-content';
-    a.style.maxWidth = 'none';
-    a.style.alignSelf = dir === 'R' ? 'flex-start' : dir === 'L' ? 'flex-end' : 'center';
-    a.style.textAlign = dir === 'R' ? 'left' : dir === 'L' ? 'right' : 'center';
-    var room = a.parentElement ? a.parentElement.clientWidth : a.clientWidth;
-    var spill = Math.max(0, a.scrollWidth - room);
-    if (spill && dir !== 'R') {
-      a.style.position = 'relative';
-      a.style.left = (dir === 'L' ? -spill : -spill / 2) + 'px';
-    }
+    a.style.textAlign = homeAlign(cfg);
+    growLine(a, cfg);
   }
 
   function fitWho(cfg) {
     var w = S.roles.who; if (!w || w.hidden || !S.np) return;
+    if (cfg.style === 'winamp' || cfg.style === 'code') return;
     resetText(w);
     if (!(cfg.nick && S.np.who)) return;
     w.textContent = 'заказ: ' + S.np.who;
-    if (compactStyle(cfg)) return;           // стиль сам обрезает многоточием
-    var dir = awayDir(w);
-    w.style.overflow = 'visible';
-    w.style.width = 'max-content';
-    w.style.maxWidth = 'none';
-    w.style.alignSelf = dir === 'R' ? 'flex-start' : dir === 'L' ? 'flex-end' : 'center';
-    w.style.textAlign = dir === 'R' ? 'left' : dir === 'L' ? 'right' : 'center';
-    var room = w.parentElement ? w.parentElement.clientWidth : w.clientWidth;
-    var spill = Math.max(0, w.scrollWidth - room);
-    if (spill && dir !== 'R') {
-      w.style.position = 'relative';
-      w.style.left = (dir === 'L' ? -spill : -spill / 2) + 'px';
+    w.style.whiteSpace = 'nowrap';
+    if (compactStyle(cfg)) {
+      // Стиль сам обрезает ник многоточием (№7, №20).
+      return;
     }
+    w.style.overflow = 'visible';
+    w.style.textAlign = homeAlign(cfg);
+    growLine(w, cfg);
   }
 
   function fitAll() {
