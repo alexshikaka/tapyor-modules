@@ -68,7 +68,7 @@ test('OV1: мусор в моушн-настройках заменяется, �
   const c = normalize({ nick: false, motion: { style: 'нет', pos: 'zz', dx: 'x', size: 999, color: 'red', vizColor: '#0f8', outline: 'да', scene: 'zz', hold: 99 } });
   assert.equal(c.nick, false);
   assert.equal(c.motion.style, 'dos'); assert.equal(c.motion.pos, 'bc');
-  assert.equal(c.motion.dx, 0); assert.equal(c.motion.size, 150); assert.equal(c.motion.color, '#FFFFFF');
+  assert.equal(c.motion.dx, 0); assert.equal(c.motion.size, 150); assert.equal(c.motion.color, '#FFB000');
   assert.equal(c.motion.vizColor, '#00FF88'); assert.equal(c.motion.outline, true);
   assert.deepEqual(SCENES, ['brand', 'rush', 'mask', 'plate']); assert.equal(c.motion.scene, 'brand');
   assert.equal(c.motion.hold, 15);
