@@ -24,6 +24,12 @@
     { title: 'Instant Crush', artist: 'Daft Punk' },
     { title: 'Dreams', artist: 'Fleetwood Mac', who: 'dimon_play' }
   ];
+  // ?queue=long: очередь для проверки обрезки — очень длинная, средняя и короткая строки.
+  var LONG_QUEUE = [
+    { title: TRACKS.long.title, artist: TRACKS.long.artist, who: TRACKS.long.who },
+    QUEUE[2],
+    { title: 'Ночь', artist: 'Кино' }
+  ];
 
   // ?feat=key:0,key:1 — проверка переключателей в Chromium: off/on для любого ключа.
   // Значения 0/1 — булевы, числа — числом, остальное (en/ru) — строкой.
@@ -62,6 +68,8 @@
       style: q.get('style') || '',
       pos: q.get('pos') || '',
       nick: q.get('nick'),
+      // ?queue=long — длинная очередь для проверок обрезки строк.
+      queue: q.get('queue') || '',
       // Сдвиг и размер для проверок: те же границы, что в настройках модуля.
       dx: num(q.get('dx'), 0, -900, 900),
       dy: num(q.get('dy'), 0, -500, 500),
@@ -82,7 +90,10 @@
   }
 
   function list(kind) { return (ORDER[kind] || ORDER.normal).map(function (k) { return Object.assign({}, TRACKS[k]); }); }
-  function queue() { return QUEUE.map(function (x) { return Object.assign({}, x); }); }
+  function queue(kind) {
+    var src = kind === 'long' ? LONG_QUEUE : QUEUE;
+    return src.map(function (x) { return Object.assign({}, x); });
+  }
 
   var api = { TRACKS: TRACKS, options: options, parseFeat: parseFeat, np: np, list: list, queue: queue };
   if (typeof module === 'object' && module.exports) module.exports = api;

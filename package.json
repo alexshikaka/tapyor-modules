@@ -14,6 +14,7 @@
     "check:overlays:features": "node tools/check-overlays.mjs --features=1",
     "check:overlays:outline": "node tools/check-overlays.mjs --outline=1",
     "check:overlays:align": "node tools/check-overlays.mjs --align=1",
+    "check:overlays:queue": "node tools/check-overlays.mjs --queue=1",
     "check:overlays:shift": "node tools/check-overlays.mjs --shift=1"
   },
   "devDependencies": {
