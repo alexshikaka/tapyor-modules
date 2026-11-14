@@ -83,7 +83,7 @@ test('OV2: команда styles отдаёт цвета вместе с ост�
   const list = o.command('styles');
   assert.equal(list.length, 26);
   for (const s of list) {
-    assert.deepEqual(Object.keys(s).sort(), ['color', 'font', 'have', 'id', 'name', 'num', 'vizColor']);
+    assert.deepEqual(Object.keys(s).sort(), ['color', 'features', 'font', 'have', 'id', 'name', 'num', 'vizColor', 'vizKind']);
     assert.match(s.color, HEX); assert.match(s.vizColor, HEX);
   }
 });
