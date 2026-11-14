@@ -277,9 +277,19 @@
     return SCALE;
   }
 
+  function coverBlockEl() {
+    var c = S.roles.cover; if (!c) return null;
+    var p = c.parentElement;
+    while (p && p !== S.root) {
+      if (/cover-shell|radar-scope|pop-star|cassette-body|polaroid-frame|bp-frame/.test(p.className)) return p;
+      p = p.parentElement;
+    }
+    return c;
+  }
+
   function awayDir(el) {
     var h = currentCfg().pos[1] || 'r';
-    var cv = S.coverSlot;
+    var cv = coverBlockEl();
     if (cv && !cv.hidden && cv.offsetParent) {
       var c = cv.getBoundingClientRect(), r = el.getBoundingClientRect();
       if (c.right <= r.left + 2) return 'R';
@@ -590,11 +600,22 @@
     var root = S.root; if (!root) return null;
     var R = root.getBoundingClientRect();
     var U = { l: R.left, t: R.top, r: R.right, b: R.bottom };
-    [S.roles.cover, S.roles.title, S.roles.artist, S.roles.who].concat(
-      Array.prototype.slice.call(root.querySelectorAll('[data-role="viz"]'))
-    ).forEach(function (el) {
+    var cover = coverBlockEl();
+    if (cover && !cover.hidden && cover.offsetParent) {
+      var cr = cover.getBoundingClientRect();
+      U.l = Math.min(U.l, cr.left); U.t = Math.min(U.t, cr.top);
+      U.r = Math.max(U.r, cr.right); U.b = Math.max(U.b, cr.bottom);
+    }
+    [S.roles.title, S.roles.artist, S.roles.who].forEach(function (el) {
       if (!el || el.hidden || !el.offsetParent) return;
       var r = inkRect(el);
+      if (!r.width) return;
+      U.l = Math.min(U.l, r.left); U.t = Math.min(U.t, r.top);
+      U.r = Math.max(U.r, r.right); U.b = Math.max(U.b, r.bottom);
+    });
+    root.querySelectorAll('[data-role="viz"]').forEach(function (el) {
+      if (el.hidden || !el.offsetParent) return;
+      var r = el.getBoundingClientRect();
       if (!r.width) return;
       U.l = Math.min(U.l, r.left); U.t = Math.min(U.t, r.top);
       U.r = Math.max(U.r, r.right); U.b = Math.max(U.b, r.bottom);
@@ -608,7 +629,8 @@
     ov.style.translate = '';
     if (cfg.pos[1] !== 'c') return;
     var b = seenBox(); if (!b) return;
-    var d = M.centerShift(b.R, b.U);
+    // Центр не коробки, а всего видимого — прямо в координатах окна 1920.
+    var d = M.centerShift({ left: 0, right: window.innerWidth }, b.U);
     if (Math.abs(d) > 0.5) ov.style.translate = d + 'px 0';
   }
 
@@ -806,9 +828,4 @@
   }
 
   window.TapOverlayApp = { start: init };
-  if (typeof window !== 'undefined') {
-    window.__ovDebug = function () { return { motion: MOTION, cfg: currentCfg(), built: S.builtStyle }; };
-    window.__ovRecenter = function () { centerMotion(); fitPlate(); return ov.style.translate; };
-    window.__ovSeen = function () { return seenBox(); };
-  }
 })();
