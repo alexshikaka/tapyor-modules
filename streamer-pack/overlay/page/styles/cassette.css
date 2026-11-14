@@ -13,5 +13,5 @@
 [data-style="cassette"] .who{color:var(--v)}
 [data-style="cassette"] .viz-b{height:16px;margin:6px 0}
 [data-style="cassette"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
-[data-style="cassette"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="cassette"] .vz-b i{flex:1;background:var(--v)}
 [data-style="cassette"] .queue{font-size:18px}

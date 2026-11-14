@@ -10,5 +10,5 @@
 [data-style="popart"] .who{color:var(--a3)}
 [data-style="popart"] .viz-b{height:22px;margin:6px 0 4px}
 [data-style="popart"] .vz-b{display:flex;align-items:flex-end;gap:5px;height:100%}
-[data-style="popart"] .vz-b i{flex:1;background:var(--v);border:2px solid #000}
+[data-style="popart"] .vz-b i{flex:1;background:var(--v)}
 [data-style="popart"] .queue{font-size:21px}

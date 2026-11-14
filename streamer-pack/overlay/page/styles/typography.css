@@ -6,5 +6,5 @@
 [data-style="typography"] .artist{font-size:19px;font-weight:700;opacity:.9}
 [data-style="typography"] .viz-b{height:18px;margin:6px 0;border-top:1px solid color-mix(in srgb,var(--c) 55%,transparent);padding-top:4px}
 [data-style="typography"] .vz-b{display:flex;align-items:flex-end;gap:2px;height:100%}
-[data-style="typography"] .vz-b i{flex:1;background:var(--v);border-radius:1px;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+[data-style="typography"] .vz-b i{flex:1;background:var(--v);border-radius:1px}
 [data-style="typography"] .queue{font-size:19px;font-weight:600;line-height:1.35}

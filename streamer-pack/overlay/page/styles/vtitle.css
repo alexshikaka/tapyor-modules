@@ -13,5 +13,5 @@
 [data-style="vtitle"] .vz-bw{display:flex;flex-direction:column;gap:4px;align-items:flex-start;width:100%}
 [data-style="vtitle"][data-h="r"] .vz-bw{align-items:flex-end}
 [data-style="vtitle"][data-h="c"] .vz-bw{align-items:center}
-[data-style="vtitle"] .vz-bw i{height:4px;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="vtitle"] .vz-bw i{height:4px;background:var(--v)}
 [data-style="vtitle"] .queue{font-size:19px}

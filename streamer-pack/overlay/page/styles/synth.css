@@ -9,5 +9,5 @@
 [data-style="synth"] .viz-b{height:22px;margin:6px 0;transform:skewX(-20deg);transform-origin:bottom}
 [data-style="synth"][data-h="r"] .viz-b{transform:skewX(20deg)}
 [data-style="synth"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
-[data-style="synth"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="synth"] .vz-b i{flex:1;background:var(--v)}
 [data-style="synth"] .queue{border-top:3px solid var(--a2);padding-top:4px;font-size:19px}

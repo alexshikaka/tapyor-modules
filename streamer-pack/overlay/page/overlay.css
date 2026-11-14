@@ -56,6 +56,16 @@ body { font-synthesis: none; }
 .style-root[data-h="r"] .vz-sp,
 .style-root[data-h="r"] .vz-g { flex-direction: row-reverse; }
 .style-root[data-h="r"] .prog { flex-direction: row-reverse; }
+/* OV6: DOS, 8-бит HUD, Код и Радар в правых углах не зеркалятся — лента бежит
+   и шкала заполняется слева направо точно так же, как в вариантах «слева». */
+.style-root[data-h="r"][data-style="dos"] .vz-sp,
+.style-root[data-h="r"][data-style="hud8"] .vz-sp,
+.style-root[data-h="r"][data-style="code"] .vz-sp,
+.style-root[data-h="r"][data-style="radar"] .vz-sp,
+.style-root[data-h="r"][data-style="dos"] .prog,
+.style-root[data-h="r"][data-style="hud8"] .prog,
+.style-root[data-h="r"][data-style="code"] .prog,
+.style-root[data-h="r"][data-style="radar"] .prog { flex-direction: row; }
 /* Горизонтальная очередь-лента: справа чипы идут от правого края, по центру — по центру. */
 .style-root[data-h="r"] .ribbon-queue { flex-direction: row-reverse; }
 .style-root[data-h="c"] .ribbon-queue { justify-content: center; }
@@ -141,12 +151,21 @@ body { font-synthesis: none; }
   text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
     2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
 }
-/* Тонкий тёмный контур у блоков: обложка, визуализатор, шкала прогресса. */
+/* Тонкий тёмный контур у блоков: обложка и шкала прогресса. */
 #ov.outline .style-root .cover-slot,
-#ov.outline .style-root [data-role="viz"],
 #ov.outline .style-root [data-role="prog"] {
   outline: 1px solid rgba(0,0,0,.72);
   outline-offset: 1px;
+}
+/* OV6: у визуализатора нет чёрной обводки — ни рамки, ни тени, ни штриха букв.
+   Обводка остаётся только у текста и обложки/рамок. */
+#ov .style-root [data-role="viz"],
+#ov .style-root [data-role="viz"] * {
+  box-shadow: none;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+  outline: none;
+  filter: none;
 }
 
 /* Тишина: оверлей остаётся в кадре, но пустой. */

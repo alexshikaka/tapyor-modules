@@ -7,5 +7,5 @@
 [data-style="card"] .who{color:var(--c2)}
 [data-style="card"] .viz-b{height:18px;margin-top:5px}
 [data-style="card"] .vz-b{display:flex;align-items:flex-end;gap:3px;height:100%}
-[data-style="card"] .vz-b i{flex:1;background:var(--v);box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="card"] .vz-b i{flex:1;background:var(--v)}
 [data-style="card"] .queue{margin-top:8px;font-size:19px}

@@ -10,7 +10,8 @@
       root.classList.add('hud8');
       var row = K.h('div', 'row'), cov = K.cover('hud8-cover'), txt = K.h('div', 'textcol');
       txt.append(K.text('time', 'hud8-time'), K.text('title', 'title'), K.text('artist', 'artist'), K.text('who', 'who'));
-      row.append(cov, txt); root.append(row, K.prog('hud8-prog'), K.queue());
+      // Лента громкости, как в DOS: «волна» — история, «спектр» — полосы (OV6).
+      row.append(cov, txt); root.append(row, K.viz('sp', 28, { cls: 'hud8-viz' }), K.prog('hud8-prog'), K.queue());
     }
   });
 })();

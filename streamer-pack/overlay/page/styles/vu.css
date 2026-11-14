@@ -10,5 +10,5 @@
 [data-style="vu"] .vz-nd{position:relative;width:64px;height:40px;background:
   radial-gradient(circle at 50% 100%,transparent 0 27px,rgba(255,255,255,.75) 28px 30px,transparent 31px),
   conic-gradient(from -55deg at 50% 100%,transparent 0 110deg,rgba(255,59,48,.85) 110deg 135deg,transparent 135deg)}
-[data-style="vu"] .needle{position:absolute;left:31px;bottom:2px;width:3px;height:30px;background:var(--a2);transform-origin:bottom center;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}
+[data-style="vu"] .needle{position:absolute;left:31px;bottom:2px;width:3px;height:30px;background:var(--a2);transform-origin:bottom center}
 [data-style="vu"] .queue{margin-top:6px;font-size:18px}

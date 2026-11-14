@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { EventEmitter } from 'node:events';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -32,6 +33,8 @@ const outlineMode = args.get('outline') === '1';
 const alignMode = args.get('align') === '1';
 const shiftMode = args.get('shift') === '1';
 const queueMode = args.get('queue') === '1';
+const motionMode = args.get('motion') === '1';
+const vizShotsMode = args.get('viz-shots') === '1';
 const shotDx = args.get('dx') || '0';
 const shotDy = args.get('dy') || '0';
 const shotSize = args.get('size') || '100';
@@ -57,13 +60,17 @@ function prepareCoreFonts(dir) {
 const coreFonts = prepareCoreFonts(coreDir);
 
 
+// Поддельный мост: настройки хранятся, события плеера можно слать из проверок (--motion).
+const em = new EventEmitter();
 const fake = {
-  settings: { get: () => null, set: () => {} },
+  store: null,
+  settings: { get: () => fake.store, set: (k, v) => { fake.store = v; } },
   http: { mount: (p, fn) => { fake.handle = fn; }, unmount: () => {}, url: (p) => `http://127.0.0.1:${port}${p}` },
   player: {
-    on: () => () => {},
+    on: (ev, fn) => { em.on(ev, fn); return () => em.off(ev, fn); },
     want: () => {},
-    coverImage: async () => null
+    coverImage: async () => null,
+    emit: (ev, x) => em.emit(ev, x)
   },
   log: (m) => { if (process.env.OVERLAY_DEBUG) console.log('[core]', m); }
 };
@@ -219,8 +226,10 @@ const measured = await page.addInitScript(() => {
     };
     const labels = { title: pseudo(title, '::before'), artist: pseudo(artist, '::before'), time: pseudo(time, '::before') };
     const secondOpacity = rows[1] ? getComputedStyle(rows[1]).opacity : '';
+    // OV6: какой вид визуализатора страница реально рисует (ставится при применении настроек).
+    const views = [...root.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || '');
     const sig = JSON.stringify({
-      style: root.dataset.style, visible, labels, queueRows: rows.length,
+      style: root.dataset.style, visible, labels, queueRows: rows.length, views,
       first: rows[0] ? rows[0].textContent : '', second: secondOpacity,
       title: title ? title.textContent : '', artist: artist ? artist.textContent : '', who: who ? who.textContent : '',
       // Кадр вертушки DOS крутится, его рамка не должна влиять на сравнение «ничего не изменилось».
@@ -228,7 +237,7 @@ const measured = await page.addInitScript(() => {
         box(root.querySelector('[data-role="prog"]')), ...viz.map(box)]
     });
     return {
-      visible, labels, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
+      visible, labels, views, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
       secondOpacity, sig,
       titleInfo: title ? {
         cls: title.className, cw: title.clientWidth, sw: title.scrollWidth,
@@ -279,6 +288,9 @@ const measured = await page.addInitScript(() => {
     if (!root || !ov) return { error: 'нет .style-root' };
     const h = ov.dataset.h || 'r';
     const style = root.dataset.style;
+    // OV6: DOS, 8-бит HUD, Код и Радар в правых углах не зеркалят ленту и шкалу:
+    // их край проверяем как у левого положения, текст — как обычно.
+    const vizH = (style === 'dos' || style === 'hud8' || style === 'code' || style === 'radar') && h === 'r' ? 'l' : h;
     const EPS = 2.5;
     const vis = (el) => {
       if (!el || el.hidden || !el.offsetParent) return false;
@@ -317,18 +329,20 @@ const measured = await page.addInitScript(() => {
       }
       return ink(el);
     };
-    const target = (c) => (h === 'r' ? c.r : h === 'l' ? c.l : c.mid);
-    const got = (ir) => (h === 'r' ? ir.r : h === 'l' ? ir.l : ir.mid);
-    const entry = (role, c, ir, extra) => {
-      const e = target(c), g = got(ir);
+    const target = (c, dir) => ((dir || h) === 'r' ? c.r : (dir || h) === 'l' ? c.l : c.mid);
+    const got = (ir, dir) => ((dir || h) === 'r' ? ir.r : (dir || h) === 'l' ? ir.l : ir.mid);
+    const entry = (role, c, ir, extra, dir) => {
+      const e = target(c, dir), g = got(ir, dir);
       return Object.assign({ role, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= EPS }, extra || {});
     };
+    // №18 «Код»: ни одна строка не перевёрнута, текст прижат влево. Визуализатор и шкалу
+    // всё равно проверяем ниже (у него своё исключение по vizH).
+    let code = null;
     if (style === 'code') {
-      // Исключение: ни одна строка не перевёрнута, текст прижат влево.
       const ta = getComputedStyle(root).textAlign;
       const head = root.querySelector('.code-head');
       const dir = head ? getComputedStyle(head).flexDirection : '';
-      return { style, h, code: { textAlign: ta, headDirection: dir, ok: ta === 'left' && dir !== 'row-reverse' }, texts: [], queue: null, viz: [], prog: null };
+      code = { textAlign: ta, headDirection: dir, ok: ta === 'left' && dir !== 'row-reverse' };
     }
     const texts = [];
     // №13/№22/№27: исполнитель и время — одна строка, проверяем её край целиком.
@@ -340,7 +354,8 @@ const measured = await page.addInitScript(() => {
       && /(^|\s)meta-line(\s|$)/.test(artistEl.parentElement.className)) {
       pair.add('artist').add('time');
     }
-    for (const role of ['title', 'artist', 'who', 'time']) {
+    // №18 «Код» проверяется отдельно (code.ok), у него строки не переворачиваются.
+    for (const role of (style === 'code' ? [] : ['title', 'artist', 'who', 'time'])) {
       const el = root.querySelector('[data-role="' + role + '"]');
       if (!vis(el)) continue;
       if (el.querySelector('.mq, .mqv')) continue;   // бегущая строка: край гуляет по замыслу
@@ -392,13 +407,15 @@ const measured = await page.addInitScript(() => {
     const q = root.querySelector('[data-role="queue"]');
     if (vis(q) && q.children.length) {
       const c = content(q);
+      // №18 «Код» в любом углу: строки очереди не переворачиваются, прижаты влево.
+      const qh = style === 'code' ? 'l' : h;
       const rows = [...q.children].filter(vis);
       const horizontal = /row/.test(getComputedStyle(q).flexDirection);
       if (horizontal) {
         const rs = rows.map((r) => r.getBoundingClientRect());
         const u = { l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)) };
         u.mid = (u.l + u.r) / 2;
-        queue = entry('queue', c, u, { horizontal: true, rows: rows.length });
+        queue = entry('queue', c, u, { horizontal: true, rows: rows.length }, qh);
       } else {
         const list = rows.map((r, i) => {
           const ir0 = textRect(r);
@@ -407,7 +424,7 @@ const measured = await page.addInitScript(() => {
           const rb = r.getBoundingClientRect();
           const ir = ir0 ? { l: Math.max(ir0.l, rb.left), r: Math.min(ir0.r, rb.right) } : null;
           if (ir) ir.mid = (ir.l + ir.r) / 2;
-          return ir && ir.r > ir.l ? Object.assign(entry('queue' + (i + 1), c, ir), { text: r.textContent.slice(0, 40) }) : null;
+          return ir && ir.r > ir.l ? Object.assign(entry('queue' + (i + 1), c, ir, null, qh), { text: r.textContent.slice(0, 40) }) : null;
         }).filter(Boolean);
         queue = { rows: list.length, bad: list.filter((x) => !x.ok).length, list: list.filter((x) => !x.ok).slice(0, 4) };
       }
@@ -426,21 +443,21 @@ const measured = await page.addInitScript(() => {
           // Стрелки VU — у дальнего края: справа это левый край, слева — правый.
           const r = box.getBoundingClientRect();
           const rr = root.getBoundingClientRect();
-          const e = h === 'r' ? rr.left : h === 'l' ? rr.right : null;
+          const e = vizH === 'r' ? rr.left : vizH === 'l' ? rr.right : null;
           if (e == null) continue;
-          const g = h === 'r' ? r.left : r.right;
+          const g = vizH === 'r' ? r.left : r.right;
           viz.push({ kind, delta: +(g - e).toFixed(2), ok: Math.abs(g - e) <= 3, far: true });
           continue;
         }
         if (kind === 'w') continue;   // волна занимает всю ширину
         // Столбики и лента на всю ширину: по центру у них нет своего края,
         // центрируется сама коробка оверлея.
-        if (h === 'c' && (kind === 'b' || kind === 'sp' || kind === 'g')) continue;
+        if (vizH === 'c' && (kind === 'b' || kind === 'sp' || kind === 'g')) continue;
         const check = kind === 'bw' ? kids : [kids[0]];
         for (const k of check) {
           const r = k.getBoundingClientRect();
           const ir = { l: r.left, r: r.right, mid: (r.left + r.right) / 2 };
-          viz.push(Object.assign(entry(kind, c, ir), { kind }));
+          viz.push(Object.assign(entry(kind, c, ir, { kind }, vizH), { kind }));
           if (kind !== 'bw') break;
         }
       }
@@ -448,14 +465,14 @@ const measured = await page.addInitScript(() => {
     // Шкала прогресса: ячейки заполняются от края.
     let prog = null;
     const p = root.querySelector('[data-role="prog"]');
-    if (vis(p) && p.children.length && h !== 'c') {
+    if (vis(p) && p.children.length && vizH !== 'c') {
       const r = p.children[0].getBoundingClientRect();
-      prog = entry('prog', content(p), { l: r.left, r: r.right, mid: (r.left + r.right) / 2 });
+      prog = entry('prog', content(p), { l: r.left, r: r.right, mid: (r.left + r.right) / 2 }, null, vizH);
     }
-    const bad = texts.filter((x) => !x.ok).length
+    const bad = (code && !code.ok ? 1 : 0) + texts.filter((x) => !x.ok).length
       + (queue ? (queue.horizontal || queue.bad == null ? (queue.ok ? 0 : 1) : queue.bad) : 0)
       + viz.filter((x) => !x.ok).length + (prog && !prog.ok ? 1 : 0);
-    return { style, h, bad, texts, queue, viz, prog };
+    return { style, h, vizH, code, bad, texts, queue, viz, prog };
   };
   // Режим --queue: каждая строка очереди — начало (номер, название) видно,
   // лишний конец обрезан (многоточием), домашний край строки — у края колонки.
@@ -566,8 +583,9 @@ const measured = await page.addInitScript(() => {
 
 // ---------- режим --features: каждый ключ каждого стиля выкл/вкл ----------
 if (featuresMode) {
-  const ALL_FEATURES = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'count', 'fade', 'fill', 'nums'];
-  const onVal = (k) => (k === 'count' ? '3' : k === 'lang' ? 'en' : '1');
+  const ALL_FEATURES = ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang', 'count', 'fade', 'fill', 'nums'];
+  const onVal = (k) => (k === 'count' ? '3' : k === 'lang' ? 'en' : k === 'viz' ? 'spectrum' : '1');
+  const offVal = (k) => (k === 'viz' ? 'wave' : '0');
   const labelText = (l) => Object.values(l)
     .filter((v) => v && v !== 'normal' && v !== 'none' && v !== '""').join(' ').trim();
   let featureTotal = 0, featureBad = 0;
@@ -591,7 +609,7 @@ if (featuresMode) {
       featureBad++; featureFailures.push({ style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
     }
     for (const key of ALL_FEATURES) {
-      const off = await open(style, key + ':0');
+      const off = await open(style, key + ':' + offVal(key));
       const on = await open(style, key + ':' + onVal(key));
       featureTotal += 2;
       const fail = (msg, extra) => { featureBad++; featureFailures.push({ style, key, msg, ...extra }); };
@@ -603,6 +621,14 @@ if (featuresMode) {
       if (key === 'fill') {
         // fill — ключ данных (добор из волны), разметка от него не зависит; проверяем в Node-тестах.
         if (off.r.sig !== on.r.sig) fail('fill не должен менять разметку');
+        continue;
+      }
+      if (key === 'viz') {
+        // Вид визуализатора: страница рисует именно выбранный вид (wave/spectrum).
+        if (!off.r.views.length) { fail('у стиля нет визуализатора для вида', { views: off.r.views }); continue; }
+        if (off.r.views.some((v) => v !== 'wave') || on.r.views.some((v) => v !== 'spectrum')) {
+          fail('вид визуализатора не переключается', { off: off.r.views, on: on.r.views });
+        }
         continue;
       }
       if (key === 'lang') {
@@ -627,7 +653,7 @@ if (featuresMode) {
     if (styles.indexOf(style) % 5 === 0) console.log('… features:', style, 'ошибок', featureBad);
   }
   // Моушн: свой набор «Что показывать», очередь к нему не относится.
-  const MOTION_SHOW = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang'];
+  const MOTION_SHOW = ['cover', 'time', 'spin', 'prog', 'osc', 'viz', 'marq', 'lang'];
   const QUEUE_KEYS = ['count', 'fade', 'fill', 'nums'];
   let motionTotal = 0;
   async function openMotion(style, feat) {
@@ -658,13 +684,20 @@ if (featuresMode) {
       featureBad++; featureFailures.push({ page: 'motion', style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
     }
     for (const key of [...MOTION_SHOW, ...QUEUE_KEYS]) {
-      const off = await openMotion(style, key + ':0');
-      const on = await openMotion(style, key + ':' + (key === 'lang' ? 'en' : '1'));
+      const off = await openMotion(style, key + ':' + offVal(key));
+      const on = await openMotion(style, key + ':' + onVal(key));
       motionTotal += 2;
       const fail = (msg, extra) => { featureBad++; featureFailures.push({ page: 'motion', style, key, msg, ...extra }); };
       if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
       if (QUEUE_KEYS.includes(key) || !declared.includes(key)) {
         if (off.r.sig !== base.r.sig || on.r.sig !== base.r.sig) fail('ключ не из набора моушна изменил вид');
+        continue;
+      }
+      if (key === 'viz') {
+        if (!off.r.views.length) { fail('у стиля нет визуализатора для вида', { views: off.r.views }); continue; }
+        if (off.r.views.some((v) => v !== 'wave') || on.r.views.some((v) => v !== 'spectrum')) {
+          fail('вид визуализатора не переключается', { off: off.r.views, on: on.r.views });
+        }
         continue;
       }
       if (key === 'lang') {
@@ -694,11 +727,11 @@ const fontFailures = [];
 const gridShots = new Map();          // id стиля → PNG (br, плейлист, средний трек) для общей сетки
 let shotCount = 0;
 const shotsDir = path.join(root, '.dsh', 'shots');
-if (shots || outlineMode) fs.mkdirSync(shotsDir, { recursive: true });
+if (shots || outlineMode || vizShotsMode) fs.mkdirSync(shotsDir, { recursive: true });
 
 // ---------- режим --outline: обводка вкл/выкл у каждого стиля + снимки на светлом фоне ----------
 if (outlineMode) {
-  let oTotal = 0, oBad = 0;
+  let oTotal = 0, oBad = 0, oViz = 0;
   const oFailures = [];
   const bgAlpha = (c) => {
     if (!c || c === 'transparent') return 0;
@@ -725,9 +758,27 @@ if (outlineMode) {
       const y = Math.max(0, Math.floor(R.top - 90));
       const r = Math.min(1920, Math.ceil(R.right + 90));
       const b = Math.min(1080, Math.ceil(R.bottom + 90));
+      // OV6: у визуализатора не должно быть ни рамки, ни тени, ни штриха — даже при «Чёрной обводке».
+      const vizBad = [];
+      for (const el of root.querySelectorAll('[data-role="viz"], [data-role="viz"] *')) {
+        const s = getComputedStyle(el);
+        const border = ['Top', 'Right', 'Bottom', 'Left'].map((side) => ({
+          w: s['border' + side + 'Width'], c: s['border' + side + 'Color']
+        })).filter((bb) => (parseFloat(bb.w) || 0) > 0 && /rgba?\(0,\s*0,\s*0/.test(bb.c));
+        const bad = s.boxShadow !== 'none' || s.textShadow !== 'none' || s.filter !== 'none'
+          || (s.outlineStyle !== 'none' && (parseFloat(s.outlineWidth) || 0) > 0)
+          || (parseFloat(s.webkitTextStrokeWidth) || 0) > 0 || border.length > 0;
+        if (bad) {
+          vizBad.push({
+            cls: String(el.className || el.tagName), boxShadow: s.boxShadow, textShadow: s.textShadow,
+            filter: s.filter, outline: s.outlineStyle + ' ' + s.outlineWidth,
+            stroke: s.webkitTextStrokeWidth, border: border.map((bb) => bb.w + ' ' + bb.c)
+          });
+        }
+      }
       return {
         stroke: cs.webkitTextStrokeWidth, shadow: cs.textShadow,
-        bg: getComputedStyle(root).backgroundColor,
+        bg: getComputedStyle(root).backgroundColor, vizBad, vizCount: root.querySelectorAll('[data-viz]').length,
         clip: { x, y, width: Math.max(1, r - x), height: Math.max(1, b - y) }
       };
     });
@@ -772,6 +823,7 @@ if (outlineMode) {
     const off = await grab(style, false);
     const on = await grab(style, true);
     oTotal++;
+    oViz += (off.info.vizCount || 0) + (on.info.vizCount || 0);
     const fail = (msg, extra) => { oBad++; oFailures.push({ style, msg, ...extra }); };
     if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
     if (off.info.error || on.info.error) { fail('нет названия для проверки обводки', { off: off.info, on: on.info }); continue; }
@@ -781,9 +833,13 @@ if (outlineMode) {
     if (so !== 0) fail('при выключенной обводке осталась обводка букв', { off: off.info.stroke });
     if (!(sn > 0 || (on.info.shadow !== 'none' && on.info.shadow !== off.info.shadow))) fail('при включённой обводке нет ни обводки, ни тени', { on: on.info });
     if (on.info.stroke === off.info.stroke && on.info.shadow === off.info.shadow) fail('вкл/выкл не меняет text-shadow и -webkit-text-stroke', { off: off.info, on: on.info });
+    // Визуализатор без обводки: проверяем и при выключенной, и при включённой «Чёрной обводке».
+    if (off.info.vizBad.length || on.info.vizBad.length) {
+      fail('у визуализатора осталась обводка/тень', { off: off.info.vizBad.slice(0, 4), on: on.info.vizBad.slice(0, 4) });
+    }
     if (off.png && on.png) await compose(def, on.info.clip, off.png, on.png);
   }
-  console.log(JSON.stringify({ mode: 'outline', total: oTotal, bad: oBad, shots: oTotal, failures: oFailures.slice(0, 40) }, null, 2));
+  console.log(JSON.stringify({ mode: 'outline', total: oTotal, vizChecked: oViz, bad: oBad, shots: oTotal, failures: oFailures.slice(0, 40) }, null, 2));
   await browser.close();
   server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
@@ -817,18 +873,19 @@ if (alignMode) {
         combos++;
         if (r.error) { badCombos++; alignFailures.push({ p, style, pos, msg: r.error }); continue; }
         if (errors.length) { badCombos++; alignFailures.push({ p, style, pos, errors: [...new Set(errors)] }); continue; }
-        if (r.code) {
-          checks++;
-          if (!r.code.ok) { badCombos++; alignFailures.push({ p, style, pos, code: r.code }); }
-          continue;
-        }
+        const codeBad = !!(r.code && !r.code.ok);
         const textBad = r.texts.filter((x) => !x.ok);
         const vizBad = r.viz.filter((x) => !x.ok);
         const qBad = r.queue ? addBad(r.queue) : 0;
-        checks += r.texts.length + (r.queue ? (r.queue.horizontal ? 1 : r.queue.rows) : 0) + r.viz.length + (r.prog ? 1 : 0);
-        if (textBad.length || vizBad.length || qBad || (r.prog && !r.prog.ok)) {
+        checks += (r.code ? 1 : 0) + r.texts.length
+          + (r.queue ? (r.queue.horizontal ? 1 : r.queue.rows) : 0) + r.viz.length + (r.prog ? 1 : 0);
+        if (codeBad || textBad.length || vizBad.length || qBad || (r.prog && !r.prog.ok)) {
           badCombos++;
-          alignFailures.push({ p, style, pos, h: r.h, texts: textBad, queue: r.queue && (r.queue.horizontal ? (r.queue.ok ? null : r.queue) : r.queue.list), viz: vizBad, prog: r.prog && !r.prog.ok ? r.prog : null });
+          alignFailures.push({
+            p, style, pos, h: r.h, vizH: r.vizH, code: codeBad ? r.code : null, texts: textBad,
+            queue: r.queue && (r.queue.horizontal ? (r.queue.ok ? null : r.queue) : r.queue.list),
+            viz: vizBad, prog: r.prog && !r.prog.ok ? r.prog : null
+          });
         }
         if (combos % 60 === 0) console.log('… align:', combos, 'сочетаний, плохих', badCombos);
       }
@@ -985,6 +1042,331 @@ if (queueMode) {
   await browser.close(); server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
   process.exit(badCombos ? 1 : 0);
+}
+
+// ---------- режим --viz-shots: снимки «Волна»/«Спектр» по типу визуализатора и правые углы ----------
+if (vizShotsMode) {
+  // Один стиль каждого типа визуализатора из OVERLAYS-VIZ.md.
+  const BY_TYPE = [
+    ['sp', 'dos'], ['b', 'typography'], ['g', 'bigtype'], ['bw', 'vtitle'],
+    ['r', 'vinyl'], ['w', 'column'], ['nd', 'vu']
+  ];
+  const RIGHT_STYLES = ['dos', 'hud8', 'code', 'radar'];
+  const SPECTRUM = new Array(32).fill(0).map((_, i) => Math.round((0.15 + 0.8 * Math.abs(Math.sin(i * 0.42))) * 1000) / 1000);
+  let shotsDone = 0, shotBad = 0;
+  const shotFailures = [];
+  async function capture(name, url, motionPage) {
+    errors.length = 0;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForTimeout(420);
+    if (motionPage) {
+      await page.evaluate(() => {
+        const ov = document.getElementById('ov');
+        ov.classList.remove('motion-hidden');
+        ov.classList.add('motion-in');
+        ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+      });
+      await page.waitForTimeout(90);
+    }
+    await page.evaluate(async () => { if (document.fonts && document.fonts.ready) await document.fonts.ready; });
+    // Живой спектр: «Спектр» рисует полосы, «Волна» — свою форму.
+    fake.player.emit('level', 0.85);
+    fake.player.emit('spectrum', SPECTRUM);
+    await page.waitForTimeout(420);
+    const views = await page.evaluate(() => [...document.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || ''));
+    await page.evaluate(() => {
+      document.documentElement.style.background = '#151a22';
+      document.body.style.background = '#151a22';
+    });
+    await page.screenshot({ path: path.join(shotsDir, name) });
+    shotsDone++;
+    if (errors.length) {
+      shotBad++;
+      shotFailures.push({ name, errors: [...new Set(errors)] });
+    }
+    return views;
+  }
+  for (const [type, style] of BY_TYPE) {
+    for (const view of ['wave', 'spectrum']) {
+      const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${style}`
+        + `&pos=br&nick=1&track=medium&feat=viz:${view}`;
+      const views = await capture(`viz-${style}-${view}.png`, url, false);
+      if (!views.length || views.some((v) => v !== view)) {
+        shotBad++;
+        shotFailures.push({ name: `viz-${style}-${view}.png`, type, views });
+      }
+    }
+  }
+  // OV6 §3: DOS, 8-бит HUD, Код и Радар в правом нижнем углу — лента и шкала не зеркалятся.
+  for (const style of RIGHT_STYLES) {
+    for (const p of ['playlist', 'motion']) {
+      const url = `http://127.0.0.1:${port}/overlay/${p}?demo=1&style=${style}`
+        + `&pos=br&nick=1&track=medium`;
+      await capture(`br-${p}-${style}.png`, url, p === 'motion');
+    }
+  }
+  console.log(JSON.stringify({ mode: 'viz-shots', shots: shotsDone, bad: shotBad, failures: shotFailures.slice(0, 20) }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(shotBad ? 1 : 0);
+}
+
+// ---------- режим --motion: каждая настройка моушна реально меняет страницу ----------
+// Сохраняем настройку через command('save', { motion }) на поддельном мосте и смотрим,
+// изменилась ли моушн-страница — и в превью (?preview=1), и в OBS-варианте.
+if (motionMode) {
+  const SNAP = {
+    np: {
+      title: "Set My Heart On Fire (I'm Alive x And The Beat Goes On) [Majestic VIP Mix]",
+      artist: 'Majestic, The Jammin Kid & Céline Dion', who: 'очень_длинный_ник_зрителя',
+      cover: '', pos: 30, dur: 243, playing: true, at: Date.now()
+    },
+    next: [], after: []
+  };
+  const BASE = {
+    style: 'dos', pos: 'br', dx: 0, dy: 0, size: 100,
+    color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true,
+    scene: 'brand', hold: 5, cover: true, time: true, spin: true, prog: true,
+    osc: true, marq: true, lang: 'en', viz: 'wave', smooth: 'mid'
+  };
+  const SPECTRUM = new Array(32).fill(0).map((_, i) => Math.min(1, 0.05 + i * 0.03));
+  const KEYS = [
+    ['style', ['dos', 'card']],
+    ['pos', ['br', 'tl']],
+    ['dx', [0, 120]],
+    ['dy', [0, 80]],
+    ['size', [100, 200]],
+    ['color', ['#FFB000', '#33FF66']],
+    ['vizColor', ['#FFB000', '#FF00AA']],
+    ['outline', [true, false]],
+    ['nick', [true, false], 'card'],
+    ['scene', ['mask', 'rush']],
+    ['cover', [true, false]],
+    ['time', [true, false]],
+    ['spin', [true, false]],
+    ['prog', [true, false]],
+    ['osc', [true, false]],
+    ['marq', [true, false]],
+    ['lang', ['en', 'ru']],
+    ['viz', ['wave', 'spectrum']],
+    ['smooth', ['slow', 'fast']]
+  ];
+  let mChecks = 0, mBad = 0;
+  const mFailures = [];
+  const SIG = () => page.evaluate(() => {
+    const ov = document.getElementById('ov');
+    const root = document.querySelector('.style-root');
+    if (!root || !ov) return { error: 'нет .style-root' };
+    const vis = (el) => {
+      if (!el || el.hidden) return false;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 || r.height > 0;
+    };
+    const pseudo = (el) => (el ? getComputedStyle(el, '::before').content || '' : '');
+    const boxes = [...root.querySelectorAll('[data-role="viz"]')];
+    const bar = root.querySelector('[data-role="viz"] i, [data-role="viz"] .needle');
+    return {
+      style: root.dataset.style, h: ov.dataset.h, v: ov.dataset.v,
+      // motion-in/motion-hidden — служебные классы видимости, их в подпись не берём.
+      cls: [...ov.classList].filter((c) => c === 'outline' || c === 'no-cover' || c === 'motion-plate-on').sort(),
+      pos: [ov.style.left, ov.style.right, ov.style.top, ov.style.bottom, ov.style.transform, ov.style.translate],
+      color: getComputedStyle(root).color,
+      vizColor: bar ? getComputedStyle(bar).backgroundColor : '',
+      views: [...root.querySelectorAll('[data-viz]')].map((z) => z.dataset.view || ''),
+      visible: {
+        cover: vis(root.querySelector('[data-role="cover"]')),
+        time: vis(root.querySelector('[data-role="time"]')),
+        spin: vis(root.querySelector('[data-role="spin"]')),
+        prog: vis(root.querySelector('[data-role="prog"]')),
+        osc: boxes.some(vis),
+        who: vis(root.querySelector('[data-role="who"]')),
+        mq: !!root.querySelector('.mq, .mqv')
+      },
+      labels: {
+        title: pseudo(root.querySelector('[data-role="title"]')),
+        artist: pseudo(root.querySelector('[data-role="artist"]')),
+        time: pseudo(root.querySelector('[data-role="time"]'))
+      },
+      title: (root.querySelector('[data-role="title"]') || {}).textContent || '',
+      bars: [...root.querySelectorAll('[data-viz] i')].slice(0, 8).map((e) => Math.round((parseFloat(e.style.height) || 0) * 10) / 10),
+      anims: ov.getAnimations({ subtree: true }).map((a) => {
+        let k = [];
+        try { k = a.effect.getKeyframes().map((x) => [String(x.transform || ''), String(x.clipPath || ''), String(x.opacity || '')]); } catch (e) { /* без кадров */ }
+        return JSON.stringify([a.effect.getTiming().duration, k]);
+      }).sort()
+    };
+  });
+  // Подпись без быстро меняющихся столбиков: она для всех ключей, кроме viz/smooth.
+  const stable = (s) => JSON.stringify({ ...s, bars: undefined });
+  async function openMPage(preview) {
+    errors.length = 0;
+    await page.goto(`http://127.0.0.1:${port}/overlay/motion${preview ? '?preview=1' : ''}`, { waitUntil: 'load' });
+    await page.waitForTimeout(360);
+    fake.player.emit('state', SNAP);
+    await page.waitForTimeout(180);
+  }
+  async function applyMotion(motion) {
+    overlay.command('save', { motion });
+    await page.waitForTimeout(90);
+    // «Показать сейчас» — как кнопка в окне настроек. Страница должна показать текущий трек.
+    overlay.command('preview-motion');
+    await page.waitForTimeout(200);
+    await page.evaluate(() => {
+      const ov = document.getElementById('ov');
+      ov.getAnimations({ subtree: true }).forEach((a) => { try { a.finish(); } catch (e) { /* бесконечные */ } });
+    });
+    await page.waitForTimeout(30);
+  }
+  async function hideDelay(motion, maxMs) {
+    overlay.command('save', { motion });
+    await page.waitForTimeout(80);
+    overlay.command('preview-motion');
+    const t0 = Date.now();
+    for (;;) {
+      const hidden = await page.evaluate(() => document.getElementById('ov').classList.contains('motion-hidden'));
+      if (hidden) return Date.now() - t0;
+      if (Date.now() - t0 > maxMs) return null;
+      await page.waitForTimeout(70);
+    }
+  }
+  async function isHidden() {
+    return page.evaluate(() => document.getElementById('ov').classList.contains('motion-hidden'));
+  }
+  async function waitHidden(maxMs) {
+    const t0 = Date.now();
+    for (;;) {
+      if (await isHidden()) return true;
+      if (Date.now() - t0 > maxMs) return false;
+      await page.waitForTimeout(80);
+    }
+  }
+  // Сколько раз за окно страница снова стала видимой (переход скрыто → видно).
+  async function countAppearances(ms) {
+    const t0 = Date.now();
+    let prev = null, n = 0;
+    while (Date.now() - t0 < ms) {
+      const hidden = await isHidden();
+      if (prev === true && hidden === false) n++;
+      prev = hidden;
+      await page.waitForTimeout(90);
+    }
+    return n;
+  }
+  async function hasClipAnim() {
+    return page.evaluate(() => document.getElementById('ov').getAnimations({ subtree: true }).some((a) => {
+      try { return a.effect.getKeyframes().some((k) => String(k.clipPath || '').includes('inset')); } catch (e) { return false; }
+    }));
+  }
+  async function smoothAvg(smooth) {
+    await applyMotion({ ...BASE, viz: 'spectrum', osc: true, smooth });
+    fake.player.emit('level', 0);
+    fake.player.emit('spectrum', new Array(32).fill(0));
+    await page.waitForTimeout(700);
+    fake.player.emit('level', 1);
+    fake.player.emit('spectrum', new Array(32).fill(1));
+    await page.waitForTimeout(70);
+    const bars = await page.evaluate(() => [...document.querySelectorAll('[data-viz] i')].slice(0, 8)
+      .map((e) => parseFloat(e.style.height) || 0));
+    return bars.reduce((a, x) => a + x, 0) / (bars.length || 1);
+  }
+  for (const preview of [false, true]) {
+    await openMPage(preview);
+    const fail = (key, msg, extra) => {
+      mBad++; mFailures.push({ preview, key, msg, ...extra });
+    };
+    if (errors.length) fail('базовый', 'ошибки страницы', { errs: [...new Set(errors)] });
+    for (const [key, pair, styleOverride] of KEYS) {
+      if (key === 'smooth') {
+        mChecks++;
+        const slow = await smoothAvg('slow');
+        const fast = await smoothAvg('fast');
+        if (!(fast > slow + 5)) fail(key, 'плавность не меняет скорость столбиков', { slow, fast });
+        continue;
+      }
+      const mk = (v) => ({ ...BASE, ...(styleOverride ? { style: styleOverride } : {}), [key]: v });
+      await applyMotion(mk(pair[0]));
+      if (key === 'viz') {
+        fake.player.emit('level', 0.9);
+        fake.player.emit('spectrum', SPECTRUM);
+        await page.waitForTimeout(140);
+      }
+      const a = await SIG();
+      await applyMotion(mk(pair[1]));
+      if (key === 'viz') {
+        fake.player.emit('level', 0.9);
+        fake.player.emit('spectrum', SPECTRUM);
+        await page.waitForTimeout(140);
+      }
+      const b = await SIG();
+      mChecks++;
+      if (errors.length) { fail(key, 'ошибки страницы', { errs: [...new Set(errors)] }); continue; }
+      if (key === 'viz') {
+        // Вид переключается и рисунок другой: лента истории против полос спектра.
+        if (a.views.join() === b.views.join()) fail(key, 'вид визуализатора не переключился', { a: a.views, b: b.views });
+        else if (a.bars.join() === b.bars.join()) fail(key, 'рисунок визуализатора не изменился', { a: a.bars, b: b.bars });
+        continue;
+      }
+      if (stable(a) === stable(b)) fail(key, 'страница не изменилась', { off: a, on: b });
+    }
+    // Длительность показа: hold=3 скрывается раньше, hold=9 — позже 5 с.
+    mChecks += 2;
+    const short = await hideDelay({ ...BASE, hold: 3 }, 5200);
+    if (!(short && short > 2400 && short < 5200)) fail('hold', 'hold=3 не скрывает за ~3 с', { short });
+    const long = await hideDelay({ ...BASE, hold: 9 }, 5200);
+    if (long != null) fail('hold', 'hold=9 скрывает раньше 5 с', { long });
+    console.log('… motion:', preview ? 'превью' : 'OBS', 'проверок', mChecks, 'ошибок', mBad);
+  }
+
+  // ---------- OV6 §5: превью живёт само, в OBS — только смена трека и «Показать сейчас» ----------
+  const failLife = (key, msg, extra) => { mBad++; mFailures.push({ preview: null, key, msg, ...extra }); };
+  const motionWith = (o) => ({ ...BASE, hold: 3, ...o });
+  mChecks += 6;
+  // Превью: первый трек показывается сразу, в простое — бесконечный цикл с 1 с пустоты.
+  overlay.command('save', { motion: motionWith({ scene: 'brand' }) });
+  await openMPage(true);
+  overlay.command('preview-motion');
+  await page.waitForTimeout(120);
+  let shown = !(await isHidden());
+  if (!shown) failLife('preview-first', 'превью не показало первый трек', {});
+  let shows = 1 + await countAppearances(9000);
+  if (shows < 2) failLife('preview-loop', 'нет повторного появления в простое', { shows });
+  // Новый cfg в превью — как «Показать сейчас», даже если страница уже спряталась.
+  if (!(await waitHidden(6000))) failLife('preview-restart', 'страница не спряталась перед сменой настроек', {});
+  overlay.command('save', { motion: motionWith({ scene: 'mask' }) });
+  await page.waitForTimeout(500);
+  shown = !(await isHidden());
+  if (!shown) failLife('preview-restart', 'смена scene не показала страницу заново', {});
+  else if (!(await hasClipAnim())) failLife('preview-restart', 'смена scene не сменила анимацию появления', {});
+  if (!(await waitHidden(6000))) failLife('preview-color', 'страница не спряталась перед сменой цвета', {});
+  overlay.command('save', { motion: motionWith({ scene: 'brand', color: '#33FF66' }) });
+  await page.waitForTimeout(500);
+  shown = !(await isHidden());
+  if (!shown) failLife('preview-color', 'смена цвета не показала страницу заново', {});
+  // OBS: без preview первый трек не показывается, цикл не идёт, «Показать сейчас» и смена трека работают.
+  overlay.command('save', { motion: motionWith({ scene: 'brand' }) });
+  await openMPage(false);
+  await page.waitForTimeout(500);
+  if (!(await isHidden())) failLife('obs-first', 'OBS-страница показала трек сама', {});
+  overlay.command('preview-motion');
+  await page.waitForTimeout(300);
+  if (await isHidden()) failLife('obs-show', '«Показать сейчас» не показало моушн в OBS', {});
+  await page.waitForTimeout(4200);
+  if (!(await isHidden())) failLife('obs-hide', 'в OBS не спряталось после hold', {});
+  await page.waitForTimeout(1500);
+  if (!(await isHidden())) failLife('obs-loop', 'в OBS пошёл бесконечный цикл', {});
+  fake.player.emit('state', {
+    ...SNAP,
+    np: { ...SNAP.np, title: 'Другой трек', artist: 'Другой исполнитель', at: Date.now() }
+  });
+  await page.waitForTimeout(600);
+  if (await isHidden()) failLife('obs-track', 'смена трека не показала моушн в OBS', {});
+
+  console.log(JSON.stringify({ mode: 'motion', checks: mChecks, bad: mBad, keys: KEYS.length + 1, failures: mFailures.slice(0, 30) }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(mBad ? 1 : 0);
 }
 
 for (const p of pages) {
