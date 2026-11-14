@@ -312,6 +312,13 @@ if (shots || outlineMode) fs.mkdirSync(shotsDir, { recursive: true });
 if (outlineMode) {
   let oTotal = 0, oBad = 0;
   const oFailures = [];
+  const bgAlpha = (c) => {
+    if (!c || c === 'transparent') return 0;
+    const m = /rgba?\(([^)]+)\)/.exec(c);
+    if (!m) return 1;
+    const p = m[1].split(',').map(Number);
+    return p.length > 3 ? p[3] : 1;
+  };
   async function grab(style, on) {
     errors.length = 0;
     const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${encodeURIComponent(style)}`
@@ -380,6 +387,8 @@ if (outlineMode) {
     const fail = (msg, extra) => { oBad++; oFailures.push({ style, msg, ...extra }); };
     if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
     if (off.info.error || on.info.error) { fail('нет названия для проверки обводки', { off: off.info, on: on.info }); continue; }
+    // Все оверлеи без подложки: страница OBS должна быть прозрачной.
+    if (bgAlpha(off.info.bg) !== 0) fail('у оверлея непрозрачный фон', { bg: off.info.bg });
     const so = parseFloat(off.info.stroke) || 0, sn = parseFloat(on.info.stroke) || 0;
     if (so !== 0) fail('при выключенной обводке осталась обводка букв', { off: off.info.stroke });
     if (!(sn > 0 || (on.info.shadow !== 'none' && on.info.shadow !== off.info.shadow))) fail('при включённой обводке нет ни обводки, ни тени', { on: on.info });

@@ -1,4 +1,4 @@
-.style-root[data-style="code"]{width:340px;text-align:left;font:700 16px/1.35 "JetBrains Mono",monospace;color:var(--c);background:var(--bg);padding:0 6px 4px}
+.style-root[data-style="code"]{width:340px;text-align:left;font:700 16px/1.35 "JetBrains Mono",monospace;color:var(--c);padding:0 6px 4px}
 [data-style="code"] .code-head{display:flex;gap:10px;align-items:center;color:var(--a2);margin-bottom:4px}
 [data-style="code"] .cover-slot{width:44px;height:44px;background:var(--bg)}
 [data-style="code"] .code-const{color:var(--a3)}
