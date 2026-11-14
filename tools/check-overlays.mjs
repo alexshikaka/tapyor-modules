@@ -28,6 +28,7 @@ const pages = (args.get('pages') || 'playlist,motion').split(',');
 const tracks = (args.get('tracks') || 'normal,medium,long').split(',');
 const shots = args.get('shots') === '1';
 const featuresMode = args.get('features') === '1';
+const outlineMode = args.get('outline') === '1';
 const coreDir = args.get('core') || process.env.TAPYOR_PLAYER || 'E:\\Tapyor\\Tapyor-player';
 
 // ---------- шрифты ядра: только чтение, копия во временную папку проверки ----------
@@ -305,7 +306,92 @@ const fontFailures = [];
 const gridShots = new Map();          // id стиля → PNG (br, плейлист, средний трек) для общей сетки
 let shotCount = 0;
 const shotsDir = path.join(root, '.dsh', 'shots');
-if (shots) fs.mkdirSync(shotsDir, { recursive: true });
+if (shots || outlineMode) fs.mkdirSync(shotsDir, { recursive: true });
+
+// ---------- режим --outline: обводка вкл/выкл у каждого стиля + снимки на светлом фоне ----------
+if (outlineMode) {
+  let oTotal = 0, oBad = 0;
+  const oFailures = [];
+  async function grab(style, on) {
+    errors.length = 0;
+    const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${encodeURIComponent(style)}`
+      + `&pos=br&nick=1&track=medium&feat=outline:${on ? '1' : '0'}`;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForTimeout(380);
+    const info = await page.evaluate(() => {
+      document.documentElement.style.background = '#f2eee6';
+      document.body.style.background = '#f2eee6';
+      const root = document.querySelector('.style-root');
+      const title = root && root.querySelector('[data-role="title"]');
+      if (!root || !title) return { error: 'нет названия' };
+      const cs = getComputedStyle(title);
+      const R = root.getBoundingClientRect();
+      const x = Math.max(0, Math.floor(R.left - 420));
+      const y = Math.max(0, Math.floor(R.top - 90));
+      const r = Math.min(1920, Math.ceil(R.right + 90));
+      const b = Math.min(1080, Math.ceil(R.bottom + 90));
+      return {
+        stroke: cs.webkitTextStrokeWidth, shadow: cs.textShadow,
+        bg: getComputedStyle(root).backgroundColor,
+        clip: { x, y, width: Math.max(1, r - x), height: Math.max(1, b - y) }
+      };
+    });
+    const png = info.error ? null : await page.screenshot({ clip: info.clip });
+    return { info, errs: [...new Set(errors)], png };
+  }
+  async function compose(def, clip, offPng, onPng) {
+    const gap = 12, labelH = 26, headH = 30;
+    const W = clip.width * 2 + gap * 3, H = headH + gap + clip.height + labelH + gap;
+    const cp = await context.newPage();
+    await cp.setViewportSize({ width: W, height: H });
+    await cp.setContent('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
+    const dataUrl = await cp.evaluate(async (arg) => {
+      const cv = document.createElement('canvas');
+      cv.width = arg.W; cv.height = arg.H;
+      document.body.append(cv);
+      const ctx = cv.getContext('2d');
+      const load = (b64) => new Promise((resolve) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = () => resolve(null);
+        im.src = 'data:image/png;base64,' + b64;
+      });
+      const [a, b] = await Promise.all([load(arg.off), load(arg.on)]);
+      ctx.fillStyle = '#f2eee6'; ctx.fillRect(0, 0, arg.W, arg.H);
+      ctx.fillStyle = '#1b1b1b'; ctx.font = '700 19px sans-serif'; ctx.textBaseline = 'middle';
+      ctx.fillText(arg.title + ' · обводка', arg.gap, arg.headH / 2 + 2);
+      const ty = arg.headH + arg.gap;
+      if (a) ctx.drawImage(a, arg.gap, ty, arg.clip.width, arg.clip.height);
+      if (b) ctx.drawImage(b, arg.gap * 2 + arg.clip.width, ty, arg.clip.width, arg.clip.height);
+      ctx.font = '600 16px sans-serif';
+      ctx.fillText('выкл', arg.gap, ty + arg.clip.height + arg.labelH / 2);
+      ctx.fillText('вкл', arg.gap * 2 + arg.clip.width, ty + arg.clip.height + arg.labelH / 2);
+      return cv.toDataURL('image/png');
+    }, { W, H, gap, labelH, headH, clip, off: offPng.toString('base64'), on: onPng.toString('base64'), title: '№' + def.num + ' ' + def.name });
+    fs.writeFileSync(path.join(shotsDir, 'outline-' + def.id + '.png'), Buffer.from(dataUrl.split(',')[1], 'base64'));
+    await cp.close();
+  }
+  for (const style of styles) {
+    const def = STYLE_DEFS.find((s) => s.id === style);
+    if (!def) continue;
+    const off = await grab(style, false);
+    const on = await grab(style, true);
+    oTotal++;
+    const fail = (msg, extra) => { oBad++; oFailures.push({ style, msg, ...extra }); };
+    if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
+    if (off.info.error || on.info.error) { fail('нет названия для проверки обводки', { off: off.info, on: on.info }); continue; }
+    const so = parseFloat(off.info.stroke) || 0, sn = parseFloat(on.info.stroke) || 0;
+    if (so !== 0) fail('при выключенной обводке осталась обводка букв', { off: off.info.stroke });
+    if (!(sn > 0 || (on.info.shadow !== 'none' && on.info.shadow !== off.info.shadow))) fail('при включённой обводке нет ни обводки, ни тени', { on: on.info });
+    if (on.info.stroke === off.info.stroke && on.info.shadow === off.info.shadow) fail('вкл/выкл не меняет text-shadow и -webkit-text-stroke', { off: off.info, on: on.info });
+    if (off.png && on.png) await compose(def, on.info.clip, off.png, on.png);
+  }
+  console.log(JSON.stringify({ mode: 'outline', total: oTotal, bad: oBad, shots: oTotal, failures: oFailures.slice(0, 40) }, null, 2));
+  await browser.close();
+  server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(oBad ? 1 : 0);
+}
 
 for (const p of pages) {
   for (const style of styles) {

@@ -111,9 +111,21 @@ body { font-synthesis: none; }
 .prog i { display: block; flex: 1; background: var(--c0, rgba(255,255,255,.25)); }
 .prog i.on { background: var(--c); }
 
-/* Общая чёрная обводка для гладких шрифтов; пиксельные стили переопределяют. */
-#ov.outline { paint-order: stroke fill; }
+/* Чёрная обводка текста: пиксельные — тень по 8 направлениям, гладкие — обводка букв.
+   Свойства наследуются, поэтому правило на корне стиля обводит всё его тексты. */
 #ov.outline .style-root.glow { text-shadow: 0 2px 8px rgba(0,0,0,.65); }
+#ov.outline .style-root:not(.pixel) { -webkit-text-stroke: 1.5px #000; paint-order: stroke fill; }
+#ov.outline .style-root.pixel {
+  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
+    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
+}
+/* Тонкий тёмный контур у блоков: обложка, визуализатор, шкала прогресса. */
+#ov.outline .style-root .cover-slot,
+#ov.outline .style-root [data-role="viz"],
+#ov.outline .style-root [data-role="prog"] {
+  outline: 1px solid rgba(0,0,0,.72);
+  outline-offset: 1px;
+}
 
 /* Тишина: оверлей остаётся в кадре, но пустой. */
 #idle {
@@ -143,8 +155,4 @@ body.idle #ov { display: none; }
 #ov.motion-hidden { visibility: hidden; }
 #ov.motion-in { visibility: visible; }
 
-/* Пиксельная обводка (8 теней) — только для пиксельных стилей. */
-#ov.outline .style-root.pixel {
-  text-shadow: 2px 0 #000, -2px 0 #000, 0 2px #000, 0 -2px #000,
-    2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
-}
+
