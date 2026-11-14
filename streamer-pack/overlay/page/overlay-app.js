@@ -65,7 +65,7 @@
     demoIndex: 0, pausedLast: null, vizPausedAt: 0
   };
 
-  var DEMO_QUEUE = DEMO_LIB.queue();
+  var DEMO_QUEUE = DEMO_LIB.queue(DOPT.queue);
 
   function palette(id) {
     var d = DEFS[id] || DEFS.dos;

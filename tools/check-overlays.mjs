@@ -31,6 +31,7 @@ const featuresMode = args.get('features') === '1';
 const outlineMode = args.get('outline') === '1';
 const alignMode = args.get('align') === '1';
 const shiftMode = args.get('shift') === '1';
+const queueMode = args.get('queue') === '1';
 const shotDx = args.get('dx') || '0';
 const shotDy = args.get('dy') || '0';
 const shotSize = args.get('size') || '100';
@@ -400,8 +401,13 @@ const measured = await page.addInitScript(() => {
         queue = entry('queue', c, u, { horizontal: true, rows: rows.length });
       } else {
         const list = rows.map((r, i) => {
-          const ir = textRect(r);
-          return ir ? Object.assign(entry('queue' + (i + 1), c, ir), { text: r.textContent.slice(0, 40) }) : null;
+          const ir0 = textRect(r);
+          // Длинная строка обрезана своей коробкой (многоточие): край меряем по
+          // видимому тексту, иначе range «вылезает» за колонку и ломает проверку.
+          const rb = r.getBoundingClientRect();
+          const ir = ir0 ? { l: Math.max(ir0.l, rb.left), r: Math.min(ir0.r, rb.right) } : null;
+          if (ir) ir.mid = (ir.l + ir.r) / 2;
+          return ir && ir.r > ir.l ? Object.assign(entry('queue' + (i + 1), c, ir), { text: r.textContent.slice(0, 40) }) : null;
         }).filter(Boolean);
         queue = { rows: list.length, bad: list.filter((x) => !x.ok).length, list: list.filter((x) => !x.ok).slice(0, 4) };
       }
@@ -450,6 +456,111 @@ const measured = await page.addInitScript(() => {
       + (queue ? (queue.horizontal || queue.bad == null ? (queue.ok ? 0 : 1) : queue.bad) : 0)
       + viz.filter((x) => !x.ok).length + (prog && !prog.ok ? 1 : 0);
     return { style, h, bad, texts, queue, viz, prog };
+  };
+  // Режим --queue: каждая строка очереди — начало (номер, название) видно,
+  // лишний конец обрезан (многоточием), домашний край строки — у края колонки.
+  window.__ovQueue = () => {
+    const root = document.querySelector('.style-root');
+    const ov = document.getElementById('ov');
+    if (!root || !ov) return { error: 'нет .style-root' };
+    const style = root.dataset.style;
+    const h = ov.dataset.h || 'r';
+    // №18 «Код»: строки не переворачиваются, всё слева (как в --align).
+    const edge = style === 'code' ? 'l' : h;
+    const EPS = 2.5;
+    const q = root.querySelector('[data-role="queue"]');
+    if (!q || q.hidden || !q.offsetParent) return { error: 'нет очереди' };
+    const qr = q.getBoundingClientRect();
+    const qcs = getComputedStyle(q);
+    const content = {
+      l: qr.left + (parseFloat(qcs.paddingLeft) || 0),
+      r: qr.right - (parseFloat(qcs.paddingRight) || 0)
+    };
+    content.mid = (content.l + content.r) / 2;
+    const rows = [...q.children].filter((el) => el.offsetParent && el.getBoundingClientRect().width > 0);
+    if (!rows.length) return { error: 'нет строк очереди' };
+    const horizontal = /row/.test(getComputedStyle(q).flexDirection);
+    const hasPseudo = (el) => {
+      for (const pe of ['::before', '::after']) {
+        const c = getComputedStyle(el, pe).content;
+        if (c && c !== 'none' && c !== 'normal') return true;
+      }
+      return false;
+    };
+    // Левый/правый край текста строки. У подписей-псевдоэлементов range их не видит —
+    // тогда меряем коробку (как в --align).
+    const textEdge = (el) => {
+      const r = el.getBoundingClientRect();
+      if (hasPseudo(el)) return { l: r.left, r: r.right };
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const ir = range.getBoundingClientRect();
+        if (ir.width) return { l: ir.left, r: ir.right };
+      } catch (e) { /* ниже — коробка */ }
+      return { l: r.left, r: r.right };
+    };
+    const target = (c) => (edge === 'r' ? c.r : edge === 'l' ? c.l : c.mid);
+    const home = (r) => (edge === 'r' ? r.right : edge === 'l' ? r.left : (r.left + r.right) / 2);
+    const columnW = content.r - content.l;
+    const list = rows.map((el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const ir = textEdge(el);
+      const pseudo = hasPseudo(el);
+      const textW = ir.r - ir.l;
+      // Строка не влезает в колонку очереди (вертикально) или в свою коробку (лента).
+      const overColumn = textW > columnW + 1 || (r.right - r.left) > columnW + 1;
+      const overOwn = el.scrollWidth > el.clientWidth + 1 || textW > (r.right - r.left) + 1;
+      const overflow = overColumn || overOwn;
+      // Коробка строки не вылезает за колонку: иначе начало съедает уже сама очередь.
+      const inside = r.left >= content.l - EPS && r.right <= content.r + EPS;
+      // Первый видимый символ — начало строки: левый край текста не левее
+      // своей коробки и колонки очереди.
+      const startOk = ir.l >= Math.max(r.left, content.l) - EPS;
+      // Конец при обрезке уходит за видимый край и режется (у псевдоэлементов
+      // правый край коробки уже обрезан, поэтому признак — scrollWidth).
+      const endCut = pseudo ? el.scrollWidth > el.clientWidth + 1 : ir.r > Math.min(r.right, content.r) + EPS;
+      return {
+        text: el.textContent.slice(0, 40),
+        overflow,
+        inside,
+        startOk,
+        endCut,
+        ellipsis: cs.textOverflow === 'ellipsis',
+        startAtLeft: cs.textAlign === 'left' || cs.textAlign === 'start',
+        delta: +(home(r) - target(content)).toFixed(2),
+        aligned: Math.abs(home(r) - target(content)) <= EPS
+      };
+    });
+    for (const x of list) {
+      // Не влезает: начало видно, конец обрезан многоточием; коробка — в колонке.
+      // Влезает: строка прижата к домашнему краю (вертикальная очередь).
+      x.ok = x.inside
+        && (x.overflow ? (x.startOk && x.endCut && x.startAtLeft && x.ellipsis) : (horizontal || x.aligned));
+    }
+    // Горизонтальная лента (№7): у края колонки стоит весь ряд чипов (как в --align).
+    let aligned;
+    let union = null;
+    let unionDelta = null;
+    if (horizontal) {
+      const rs = rows.map((el) => el.getBoundingClientRect());
+      union = { l: Math.min(...rs.map((r) => r.left)), r: Math.max(...rs.map((r) => r.right)) };
+      union.mid = (union.l + union.r) / 2;
+      const uHome = edge === 'r' ? union.r : edge === 'l' ? union.l : union.mid;
+      unionDelta = +(uHome - target(content)).toFixed(2);
+      aligned = Math.abs(unionDelta) <= EPS;
+    } else {
+      aligned = list.every((x) => x.aligned);
+    }
+    return {
+      style, h: edge, horizontal, aligned,
+      queue: { l: +content.l.toFixed(2), r: +content.r.toFixed(2) },
+      union: union ? { l: +union.l.toFixed(2), r: +union.r.toFixed(2) } : null,
+      unionDelta,
+      overflow: list.filter((x) => x.overflow).length,
+      rows: list
+    };
   };
 });
 
@@ -830,6 +941,50 @@ if (shiftMode) {
   await browser.close(); server.close();
   fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
   process.exit(bad ? 1 : 0);
+}
+
+// ---------- режим --queue: начало строки очереди видно, конец обрезан, край у колонки ----------
+if (queueMode) {
+  let combos = 0, rowsTotal = 0, overflowRows = 0, badCombos = 0;
+  const queueFailures = [];
+  for (const style of styles) {
+    for (const pos of positions) {
+      errors.length = 0;
+      const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${encodeURIComponent(style)}`
+        + `&pos=${pos}&nick=1&track=long&queue=long`;
+      await page.goto(url, { waitUntil: 'load' });
+      await page.evaluate(async () => { if (document.fonts && document.fonts.ready) await document.fonts.ready; });
+      await page.waitForTimeout(180);
+      const r = await page.evaluate(() => window.__ovQueue());
+      combos++;
+      if (r.error) { badCombos++; queueFailures.push({ style, pos, msg: r.error }); continue; }
+      if (errors.length) { badCombos++; queueFailures.push({ style, pos, errors: [...new Set(errors)] }); continue; }
+      const bad = r.rows.filter((x) => !x.ok);
+      rowsTotal += r.rows.length;
+      overflowRows += r.overflow;
+      // Длинная очередь обязана реально не влезать в каждом стиле — иначе проверка пустая.
+      if (!r.overflow) { badCombos++; queueFailures.push({ style, pos, msg: 'длинная строка не обрезалась', rows: r.rows.length }); continue; }
+      if (!r.aligned || bad.length) {
+        badCombos++;
+        queueFailures.push({
+          style, pos, h: r.h, aligned: r.aligned, horizontal: r.horizontal,
+          queue: r.queue, union: r.union, unionDelta: r.unionDelta,
+          rows: (bad.length ? bad : r.rows).slice(0, 4).map((x) => ({
+            text: x.text, overflow: x.overflow, inside: x.inside, startOk: x.startOk, endCut: x.endCut,
+            startAtLeft: x.startAtLeft, ellipsis: x.ellipsis, delta: x.delta
+          }))
+        });
+      }
+      if (combos % 30 === 0) console.log('… queue:', combos, 'сочетаний, плохих', badCombos);
+    }
+  }
+  console.log(JSON.stringify({
+    mode: 'queue', combos, rows: rowsTotal, overflow: overflowRows, bad: badCombos,
+    styles: styles.length, positions, failures: queueFailures.slice(0, 80)
+  }, null, 2));
+  await browser.close(); server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(badCombos ? 1 : 0);
 }
 
 for (const p of pages) {

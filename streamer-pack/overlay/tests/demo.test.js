@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const Demo = require('../page/demo');
 
 test('demo: параметры ссылки, style/pos/nick/long/track/paused', () => {
-  assert.deepEqual(Demo.options(''), { preview: false, demo: false, long: false, paused: false, track: 'normal', style: '', pos: '', nick: null, dx: 0, dy: 0, size: 100, feat: {} });
+  assert.deepEqual(Demo.options(''), { preview: false, demo: false, long: false, paused: false, track: 'normal', style: '', pos: '', nick: null, queue: '', dx: 0, dy: 0, size: 100, feat: {} });
   const o = Demo.options('?demo=1&preview=1&long=1&paused=1&style=vu&pos=tl&nick=1&track=medium');
   assert.equal(o.demo, true); assert.equal(o.preview, true); assert.equal(o.paused, true);
   assert.equal(o.track, 'medium'); assert.equal(o.style, 'vu'); assert.equal(o.pos, 'tl'); assert.equal(o.nick, '1');
@@ -23,4 +23,13 @@ test('demo: треки, позиция, пауза и очередь с нико
   assert.equal(Demo.queue()[0].who, 'lera_k');
   assert.equal('who' in Demo.queue()[3], false);
   assert.deepEqual(Demo.list('long').map((x) => x.title), [Demo.TRACKS.long.title, Demo.TRACKS.medium.title, Demo.TRACKS.normal.title]);
+});
+
+test('demo: ?queue=long — длинная очередь для проверки обрезки', () => {
+  const q = Demo.queue('long');
+  assert.equal(q.length, 3);
+  assert.equal(q[0].title, Demo.TRACKS.long.title, 'первая строка длиннее колонки в любом стиле');
+  assert.equal(q[2].title, 'Ночь', 'короткая строка помещается и проверяет выравнивание');
+  assert.equal(Demo.queue().length, 5, 'обычная очередь не изменилась');
+  assert.equal(Demo.options('?queue=long').queue, 'long');
 });

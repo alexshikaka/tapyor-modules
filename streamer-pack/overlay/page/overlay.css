@@ -109,9 +109,11 @@ body { font-synthesis: none; }
 .artist, .who { white-space: nowrap; }
 .who { font-size: .8em; line-height: 1.2; opacity: .92; }
 /* Очередь режется по своему краю, а строка прижата к домашнему краю:
-   короткая — к краю очереди, длинная уходит за противоположный край и обрезается. */
+   короткая — к краю очереди, длинная занимает всю колонку и обрезается
+   справа многоточием. Начало строки (номер, название) видно всегда,
+   в том числе в правых углах: текст не уезжает влево за колонку. */
 .queue { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
-.queue > div { white-space: nowrap; overflow: hidden; text-overflow: clip; width: max-content; max-width: none; align-self: flex-start; }
+.queue > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: max-content; max-width: 100%; align-self: flex-start; text-align: left; }
 .style-root[data-h="r"] .queue > div { align-self: flex-end; }
 .style-root[data-h="c"] .queue > div { align-self: center; }
 .queue .q-who { opacity: .72; }
