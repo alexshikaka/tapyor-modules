@@ -8,6 +8,7 @@
   var PREVIEW = qs.get('preview') === '1';
   var DEMO = qs.get('demo') === '1';
   var LONG = qs.get('long') === '1';
+  var TRACK = qs.get('track') || (LONG ? 'long' : 'normal');
   var FORCE_STYLE = qs.get('style') || '';
   var FORCE_POS = qs.get('pos') || '';
   var FORCE_NICK = qs.get('nick');
@@ -37,7 +38,7 @@
     lastSse: Date.now(), builtStyle: '', root: null, def: null, roles: {},
     coverSlot: null, coverUrl: null, queueSig: '', prog: -1, paused: false,
     trackKey: '', firstTrack: true, motionTimer: null, motionAnims: [], demoAt: Date.now(),
-    demoIndex: 0, pausedLast: null
+    demoIndex: 0, pausedLast: null, vizPausedAt: 0
   };
 
   var DEMO_NORMAL = { title: 'Группа крови', artist: 'Кино', who: 'dimon_play', pos: 92, dur: 243, playing: true, at: Date.now() };
@@ -67,7 +68,7 @@
       style: m.style || 'dos', pos: m.pos || 'bc', dx: m.dx || 0, dy: m.dy || 0, size: m.size || 100,
       color: m.color || '#FFFFFF', vizColor: m.vizColor || '#C8F542', outline: m.outline !== false,
       nick: m.nick !== false, count: 0, fade: false, fadePct: 0, nums: false, cover: true,
-      time: true, osc: true, prog: false, marq: true, lang: CFG.lang || 'en', viz: CFG.viz || 'wave',
+      time: true, osc: true, prog: true, marq: true, lang: CFG.lang || 'en', viz: CFG.viz || 'wave',
       smooth: CFG.smooth || 'mid', scene: m.scene || 'brand', hold: m.hold || 5
     };
   }
@@ -135,8 +136,6 @@
       root.dataset.noqueue = '1';
       var q = root.querySelector('[data-role="queue"]');
       if (q) q.hidden = true;
-      var p = root.querySelector('[data-role="prog"]');
-      if (p) p.hidden = true;
       root.querySelectorAll('[data-pl]').forEach(function (e) { e.hidden = true; });
     }
     S.coverUrl = null;
@@ -169,6 +168,14 @@
     if (S.coverSlot) S.coverSlot.hidden = !cfg.cover;
   }
 
+  function winampLine(cfg) {
+    var np = S.np;
+    if (!np) return '';
+    var line = '*** ' + (np.artist || '—') + ' - ' + np.title + ' ***';
+    if (cfg.nick && np.who) line = line.replace(/ \*\*\*$/, ' · заказ: ' + np.who + ' ***');
+    return line;
+  }
+
   function setTexts(cfg) {
     if (!S.roles.title) return;
     var np = S.np;
@@ -176,9 +183,7 @@
     if (!np) return;
     var title = S.roles.title, artist = S.roles.artist, who = S.roles.who;
     if (cfg.style === 'winamp') {
-      var line = '*** ' + (np.artist || '—') + ' - ' + np.title + ' ***';
-      if (cfg.nick && np.who) line = line.replace(/ \*\*\*$/, ' · заказ: ' + np.who + ' ***');
-      title.textContent = line;
+      title.textContent = winampLine(cfg);
       if (artist) { artist.textContent = ''; artist.hidden = true; }
       if (who) { who.textContent = ''; who.hidden = true; }
     } else {
@@ -215,6 +220,7 @@
         d.appendChild(w);
       }
       d.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
+      d.dataset.n = String(i + 1);
       q.appendChild(d);
     });
   }
@@ -337,7 +343,10 @@
     resetText(t);
     t.textContent = S.np ? S.np.title : '';
     var col = S.root.querySelector('[data-col="vertical"]');
+    var was = t.style.display;
+    t.style.display = 'none';                 // колонку мерим без названия, иначе она тянется за ним
     var max = Math.max(col ? col.offsetHeight : 0, 300);
+    t.style.display = was;
     if (t.scrollHeight <= max + 1) return;
     t.style.height = max + 'px';
     t.style.overflow = 'hidden';
@@ -351,14 +360,28 @@
     t.textContent = S.np.title || '';
     t.style.overflow = 'hidden';
     t.style.whiteSpace = 'nowrap';
-    if (cfg.style === 'code' || cfg.style === 'winamp') {
+    if (cfg.style === 'code') {
+      if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
+      return;
+    }
+    if (cfg.style === 'winamp') {
+      var wl = winampLine(cfg);
+      t.textContent = wl;
+      var box = t.parentElement;
+      if (box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
+      return;
+    }
+    // №7 «Нижняя лента»: справа эквалайзер, запаса нет — длинное название сразу бежит в своей колонке.
+    if (cfg.style === 'ribbon') {
       if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
       return;
     }
     var base = t.clientWidth;
     var need = Math.max(0, t.scrollWidth - base);
     if (need <= 0) return;
-    var dir = awayDir(t), extra = Math.max(0, Math.min(need, freeExtra(t, dir)));
+    var dir = awayDir(t), free = freeExtra(t, dir), extra = Math.max(0, Math.min(need, free));
+    // Моушн: коробка названия вдвое длиннее, чем у плейлиста того же стиля и угла.
+    if (MOTION && extra > 0) extra = Math.min(free, Math.max(extra, base + 2 * extra));
     if (extra > 0) {
       t.style.flex = '0 0 auto';
       t.style.width = (base + extra) + 'px';
@@ -429,6 +452,7 @@
     fitTitle(cfg);
     fitArtist(cfg);
     fitWho(cfg);
+    if (MOTION) requestAnimationFrame(function () { centerMotion(); fitPlate(); });
   }
 
   // ---------- визуализаторы ----------
@@ -467,6 +491,11 @@
     var cfg = currentCfg();
     var liveSpec = S.spec && S.specAt && now - S.specAt < 1500;
     var paused = !S.np || !S.np.playing || !cfg.osc;
+    if (paused) {
+      if (!S.vizPausedAt) S.vizPausedAt = now;
+      // Плавно опустили и остановили рисование — экономия ЦП в OBS.
+      if (now - S.vizPausedAt > 2600) return;
+    } else S.vizPausedAt = 0;
     var lv = paused ? 0 : levelNow(now);
     S.root.querySelectorAll('[data-viz]').forEach(function (z) {
       if (z.closest('[hidden]')) return;
@@ -545,13 +574,40 @@
   }
 
   // ---------- моушн ----------
+  function inkRect(el) {
+    if (!el) return null;
+    var r;
+    if (el.classList.contains('mq') || el.classList.contains('mqv') || getComputedStyle(el).overflow === 'hidden') {
+      r = el.getBoundingClientRect();
+    } else {
+      try {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        r = range.getBoundingClientRect();
+        if (!r || !r.width) r = el.getBoundingClientRect();
+      } catch (e) { r = el.getBoundingClientRect(); }
+    }
+    var p = el.parentElement;
+    while (p && p !== S.root) {
+      if (getComputedStyle(p).overflow !== 'visible') {
+        var q = p.getBoundingClientRect();
+        r = Object.assign({}, r, {
+          left: Math.max(r.left, q.left), top: Math.max(r.top, q.top),
+          right: Math.min(r.right, q.right), bottom: Math.min(r.bottom, q.bottom)
+        });
+      }
+      p = p.parentElement;
+    }
+    return r;
+  }
+
   function seenBox() {
     var root = S.root; if (!root) return null;
     var R = root.getBoundingClientRect();
     var U = { l: R.left, t: R.top, r: R.right, b: R.bottom };
     [S.roles.title, S.roles.artist, S.roles.who].forEach(function (el) {
       if (!el || el.hidden || !el.offsetParent) return;
-      var r = el.getBoundingClientRect();
+      var r = inkRect(el);
       if (!r.width) return;
       U.l = Math.min(U.l, r.left); U.t = Math.min(U.t, r.top);
       U.r = Math.max(U.r, r.right); U.b = Math.max(U.b, r.bottom);
@@ -636,6 +692,8 @@
       });
     }
     var hold = Math.max(3, Math.min(15, Number(cfg.hold) || 5));
+    // Центровка по видимому — после того, как браузер разложил текст и шрифты.
+    setTimeout(function () { centerMotion(); fitPlate(); }, 320);
     S.motionTimer = setTimeout(function () {
       var out = [{ opacity: 1 }, { opacity: 0 }];
       anim(root, out, { duration: reduce ? 260 : 420, easing: 'ease-in', fill: 'both' });
@@ -659,13 +717,13 @@
   // ---------- данные ----------
   function applyFeed(d) {
     if (!d || !d.cfg) return;
+    // В демо-режиме настройки и трек заданы ссылкой, живой поток их не перебивает.
+    if (DEMO) return;
     var cfg = d.cfg;
     CFG = cfg;
-    if (!DEMO) {
-      S.np = d.np || null;
-      S.next = d.next || [];
-      if (S.np && S.np.cover != null) S.np.cover = S.np.cover || '';
-    }
+    S.np = d.np || null;
+    S.next = d.next || [];
+    if (S.np && S.np.cover != null) S.np.cover = S.np.cover || '';
     applyConfig(CFG);
     noteTrack(S.np);
     updateCover(currentCfg());
@@ -698,7 +756,7 @@
 
   // ---------- демо ----------
   function demoNp() {
-    var base = LONG ? DEMO_LONG : DEMO_NORMAL;
+    var base = TRACK === 'long' ? DEMO_LONG : TRACK === 'medium' ? DEMO_MEDIUM : DEMO_NORMAL;
     var p = (92 + (Date.now() - S.demoAt) / 1000) % 243;
     return Object.assign({}, base, { pos: p, at: Date.now() });
   }
@@ -710,7 +768,7 @@
     updateCover(currentCfg());
     if (!MOTION) return;
     var hold = Math.max(3, Math.min(15, Number(CFG.motion.hold) || 5));
-    var list = LONG ? [DEMO_LONG, DEMO_MEDIUM, DEMO_NORMAL] : [DEMO_NORMAL, DEMO_LONG, DEMO_MEDIUM];
+    var list = TRACK === 'long' ? [DEMO_LONG, DEMO_MEDIUM, DEMO_NORMAL] : TRACK === 'medium' ? [DEMO_MEDIUM, DEMO_NORMAL, DEMO_LONG] : [DEMO_NORMAL, DEMO_MEDIUM, DEMO_LONG];
     S.demoIndex = 0;
     S.trackKey = S.np.title + '|' + S.np.artist;
     S.firstTrack = false;
@@ -754,10 +812,18 @@
       if (Date.now() - S.lastSse > 15000) connectEvents();
     }, 1000);
     setInterval(function () { if (S.np) updateTime(currentCfg()); }, 250);
+    if (MOTION) setInterval(function () {
+      if (!ov.classList.contains('motion-hidden')) { centerMotion(); fitPlate(); }
+    }, 250);
     requestAnimationFrame(rafLoop);
     window.addEventListener('resize', function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
   }
 
   window.TapOverlayApp = { start: init };
+  if (typeof window !== 'undefined') {
+    window.__ovDebug = function () { return { motion: MOTION, cfg: currentCfg(), built: S.builtStyle }; };
+    window.__ovRecenter = function () { centerMotion(); fitPlate(); return ov.style.translate; };
+    window.__ovSeen = function () { return seenBox(); };
+  }
 })();

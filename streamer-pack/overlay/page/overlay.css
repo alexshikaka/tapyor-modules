@@ -38,9 +38,11 @@ body { font-synthesis: none; }
   align-items: center;
   min-width: 0;
 }
-.style-root[data-h="r"] > .row,
-.style-root[data-h="r"] .row.mirror { flex-direction: row-reverse; }
-.style-root[data-h="c"] > .row { justify-content: center; }
+.style-root[data-h="r"] .row { flex-direction: row-reverse; }
+.style-root[data-h="c"] .row { justify-content: center; }
+.style-root[data-h="r"] .vu-head { flex-direction: row-reverse; }
+.style-root[data-h="r"][data-style="citypop"] { flex-direction: row-reverse; }
+.style-root[data-v="b"][data-nr="1"] { flex-direction: column; }
 
 /* Место обложки и заглушка. Настоящая обложка перекрывает заглушку. */
 .cover-slot {
