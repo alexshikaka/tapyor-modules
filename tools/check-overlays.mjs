@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Проверка оверлеев в Chromium на поддельном мосте Тапёра.
 // Запуск: node tools/check-overlays.mjs [--styles=card,dos] [--positions=br,tl]
-//        [--pages=playlist,motion] [--tracks=normal,medium,long] [--shots]
+//        [--pages=playlist,motion] [--tracks=normal,medium,long] [--shots] [--core=<папка ядра>]
+// Шрифты пака отдаёт сам модуль (/overlay/fonts/...), шрифты ядра (Manrope, Onest, Pixelify Sans,
+// Press Start 2P, JetBrains Mono) берутся только на чтение из ядра и копируются во временную папку.
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
@@ -12,6 +15,7 @@ import { chromium } from 'playwright';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const { Overlay } = require(path.join(root, 'streamer-pack', 'overlay', 'src', 'index.js'));
+const { STYLE_DEFS } = require(path.join(root, 'streamer-pack', 'overlay', 'src', 'styles.js'));
 
 const args = new Map();
 for (const a of process.argv.slice(2)) {
@@ -23,6 +27,25 @@ const positions = (args.get('positions') || 'br,bc,bl,tr,tc,tl').split(',');
 const pages = (args.get('pages') || 'playlist,motion').split(',');
 const tracks = (args.get('tracks') || 'normal,medium,long').split(',');
 const shots = args.get('shots') === '1';
+const coreDir = args.get('core') || process.env.TAPYOR_PLAYER || 'E:\\Tapyor\\Tapyor-player';
+
+// ---------- шрифты ядра: только чтение, копия во временную папку проверки ----------
+function prepareCoreFonts(dir) {
+  const css = path.join(dir, 'src', 'fonts.css');
+  const fonts = path.join(dir, 'src', 'assets', 'fonts');
+  if (!fs.existsSync(css) || !fs.existsSync(fonts)) {
+    throw new Error('не найдены шрифты ядра: ' + css + ' / ' + fonts + ' (укажи --core=<папка ядра>)');
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tapyor-ov-fonts-'));
+  fs.copyFileSync(css, path.join(tmp, 'fonts.css'));
+  const dst = path.join(tmp, 'assets', 'fonts');
+  fs.mkdirSync(dst, { recursive: true });
+  const names = fs.readdirSync(fonts).filter((n) => /^[a-z0-9-]+\.woff2$/.test(n));
+  for (const n of names) fs.copyFileSync(path.join(fonts, n), path.join(dst, n));
+  return { tmp, names };
+}
+const coreFonts = prepareCoreFonts(coreDir);
+
 
 const fake = {
   settings: { get: () => null, set: () => {} },
@@ -41,8 +64,16 @@ overlay.start();
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
   if (u.pathname === '/fonts.css') {
-    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
-    res.end('/* системные запасные шрифты для проверки */');
+    res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(fs.readFileSync(path.join(coreFonts.tmp, 'fonts.css')));
+    return;
+  }
+  if (u.pathname.startsWith('/assets/fonts/')) {
+    // Только имена из скопированного списка: путь из запроса не становится путём к файлу.
+    const name = u.pathname.slice('/assets/fonts/'.length);
+    if (!coreFonts.names.includes(name)) { res.writeHead(404); res.end('not found'); return; }
+    res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'no-store' });
+    res.end(fs.readFileSync(path.join(coreFonts.tmp, 'assets', 'fonts', name)));
     return;
   }
   if (u.pathname.startsWith('/overlay')) {
@@ -145,6 +176,8 @@ const measured = await page.addInitScript(() => {
 
 let total = 0, bad = 0, pageErrors = 0;
 const failures = [];
+const fontsByStyle = new Map();
+const fontFailures = [];
 const shotsDir = path.join(root, '.dsh', 'shots');
 if (shots) fs.mkdirSync(shotsDir, { recursive: true });
 
@@ -156,6 +189,28 @@ for (const p of pages) {
         errors.length = 0;
         await page.goto(url, { waitUntil: 'load' });
         await page.waitForTimeout(p === 'motion' ? 1000 : 220);
+        // Шрифт стиля: ждём document.fonts.ready и проверяем именно его семейство и вес.
+        const font = await page.evaluate(async () => {
+          await document.fonts.ready;
+          const rootEl = document.querySelector('.style-root');
+          const el = rootEl && (rootEl.querySelector('[data-role="title"]') || rootEl);
+          if (!el) return { error: 'нет текста стиля' };
+          const cs = getComputedStyle(el);
+          const family = String(cs.fontFamily || '').split(',')[0].replace(/["']/g, '').trim();
+          const weight = cs.fontWeight || '400';
+          const faces = [...document.fonts].filter((f) => f.family.replace(/["']/g, '') === family);
+          return {
+            family, weight,
+            check: document.fonts.check(weight + ' 20px "' + family + '"', 'Ёж'),
+            faceLoaded: faces.some((f) => f.status === 'loaded'),
+            faces: faces.map((f) => f.status)
+          };
+        });
+        const prev = fontsByStyle.get(style);
+        if (!prev) fontsByStyle.set(style, font);
+        if (font.error || !font.check || !font.faceLoaded) {
+          if (!prev) fontFailures.push({ style, page: p, pos, track, font });
+        }
         const r = await page.evaluate(() => window.__ovCheck());
         total++;
         if (errors.length) { pageErrors += errors.length; failures.push({ p, style, pos, track, errors: [...new Set(errors)].slice(0, 4) }); }
@@ -177,7 +232,10 @@ for (const p of pages) {
   }
 }
 
-console.log(JSON.stringify({ total, bad, pageErrors, failures: failures.slice(0, 30) }, null, 2));
+const fonts = [...fontsByStyle].map(([style, f]) => ({ style, ...f }));
+const expected = new Map(STYLE_DEFS.map((s) => [s.id, s.font]));
+console.log(JSON.stringify({ total, bad, pageErrors, fontFailures, fonts, expectedFonts: Object.fromEntries(expected), failures: failures.slice(0, 30) }, null, 2));
 await browser.close();
 server.close();
-process.exit(bad || pageErrors ? 1 : 0);
+fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+process.exit(bad || pageErrors || fontFailures.length ? 1 : 0);
