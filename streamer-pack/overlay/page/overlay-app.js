@@ -18,6 +18,26 @@
   var ov = document.getElementById('ov');
   var idle = document.getElementById('idle');
   var DEFS = window.TapStyles || {};
+  // Что у стиля реально есть (зеркало src/styles.js). Нет описания — работаем по-старому.
+  var META = window.TapStyleMeta || {};
+  var DEMO_FEATURE_KEYS = ['outline', 'nick', 'cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang',
+    'count', 'fade', 'fadePct', 'fill', 'nums', 'viz', 'smooth'];
+
+  function featuresOf(style) {
+    var m = META[style];
+    return m && Array.isArray(m.features) ? m.features : null;
+  }
+  // Ключ, которого у стиля нет, молча ничего не делает.
+  function hasFeature(style, key) {
+    var f = featuresOf(style);
+    return !f || f.indexOf(key) >= 0;
+  }
+  function coverOn(cfg) {
+    return hasFeature(cfg.style, 'cover') ? cfg.cover !== false : true;
+  }
+  function marqOn(cfg) {
+    return hasFeature(cfg.style, 'marq') && cfg.marq !== false;
+  }
 
   function pageDefaults() {
     return {
@@ -67,6 +87,16 @@
     if (FORCE_NICK === '1') c.nick = true;
     if (FORCE_NICK === '0') c.nick = false;
     return c;
+  }
+
+  // Демо/проверка: ?feat=key:0,key:1 меняет только известные ключи настроек.
+  function applyDemoFeatures() {
+    var f = DOPT.feat;
+    if (!f || !Object.keys(f).length) return;
+    var o = MOTION ? (CFG.motion && typeof CFG.motion === 'object' ? CFG.motion : CFG) : CFG;
+    Object.keys(f).forEach(function (k) {
+      if (DEMO_FEATURE_KEYS.indexOf(k) >= 0) o[k] = f[k];
+    });
   }
 
   function setDemoConfig() {
@@ -138,8 +168,9 @@
     S.root.dataset.h = pl.h; S.root.dataset.v = pl.v;
     var box = D.boxStyle(cfg);
     for (var k in box) ov.style[k] = box[k];
+    var has = function (key) { return hasFeature(cfg.style, key); };
     ov.classList.toggle('outline', !!cfg.outline);
-    ov.classList.toggle('no-cover', !cfg.cover);
+    ov.classList.toggle('no-cover', has('cover') && !coverOn(cfg));
     ov.classList.toggle('paused', !!S.paused);
 
     ov.style.setProperty('--c', cfg.color || '#fff');
@@ -149,11 +180,14 @@
     var vars = C.variables(p, cfg.color || '#fff', cfg.vizColor || cfg.color || '#fff');
     Object.keys(vars).forEach(function (name) { ov.style.setProperty(name, vars[name]); });
 
-    S.roles.time && (S.roles.time.hidden = !cfg.time);
-    S.roles.prog && (S.roles.prog.hidden = !cfg.prog);
-    S.root.querySelectorAll('[data-role="viz"]').forEach(function (v) { v.hidden = !cfg.osc; });
+    if (S.roles.time) S.roles.time.hidden = has('time') ? !cfg.time : false;
+    if (S.roles.prog) S.roles.prog.hidden = has('prog') ? !cfg.prog : false;
+    S.root.querySelectorAll('[data-role="viz"]').forEach(function (v) { v.hidden = has('osc') ? !cfg.osc : false; });
     S.root.querySelectorAll('[data-role="queue"]').forEach(function (q) { q.hidden = MOTION; });
-    if (S.coverSlot) S.coverSlot.hidden = !cfg.cover;
+    S.root.querySelectorAll('[data-role="spin"]').forEach(function (el) { el.hidden = has('spin') ? !cfg.spin : false; });
+    if (S.coverSlot) S.coverSlot.hidden = has('cover') ? !cfg.cover : false;
+    // Подписи TRACK/ARTIST: у стиля без ключа lang атрибут не ставится, CSS просто молчит.
+    S.root.dataset.lang = has('lang') ? (cfg.lang === 'ru' ? 'ru' : cfg.lang === 'en' ? 'en' : 'off') : '';
   }
 
   function winampLine(cfg) {
@@ -192,14 +226,17 @@
 
   function renderQueue(cfg) {
     var q = S.roles.queue; if (!q) return;
-    var list = (S.next || []).slice(0, cfg.count);
-    var sig = JSON.stringify(list) + '|' + cfg.nums + '|' + cfg.fade + '|' + cfg.fadePct + '|' + cfg.nick;
+    var cnt = hasFeature(cfg.style, 'count') ? cfg.count : (S.next || []).length;
+    var numsOn = hasFeature(cfg.style, 'nums') ? cfg.nums : true;
+    var fadeOn = hasFeature(cfg.style, 'fade') ? cfg.fade !== false : true;
+    var list = (S.next || []).slice(0, cnt);
+    var sig = JSON.stringify(list) + '|' + numsOn + '|' + fadeOn + '|' + cfg.fadePct + '|' + cfg.nick;
     if (sig === S.queueSig) return;
     S.queueSig = sig;
     q.textContent = '';
     list.forEach(function (it, i) {
       var d = document.createElement('div');
-      var pref = cfg.nums ? (i + 1) + '. ' : '';
+      var pref = numsOn ? (i + 1) + '. ' : '';
       d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
       if (cfg.nick && it.who) {
         var w = document.createElement('span');
@@ -207,7 +244,7 @@
         w.textContent = ' · ' + it.who;
         d.appendChild(w);
       }
-      d.style.opacity = D.fadeAt(i, cfg.fade !== false, cfg.fadePct);
+      d.style.opacity = D.fadeAt(i, fadeOn, cfg.fadePct);
       d.dataset.n = String(i + 1);
       q.appendChild(d);
     });
@@ -218,7 +255,8 @@
     if (!S.roles.time || !np) return;
     var pos = D.posAt(np, Date.now()), paused = !np.playing;
     var t = D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--');
-    if (paused) t += ' · ' + (cfg.lang === 'ru' ? 'ПАУЗА' : 'PAUSED');
+    var ru = cfg.lang === 'ru' && hasFeature(cfg.style, 'lang');
+    if (paused) t += ' · ' + (ru ? 'ПАУЗА' : 'PAUSED');
     if (S.roles.time.textContent !== t) S.roles.time.textContent = t;
     if (S.roles.prog) {
       var p = S.roles.prog;
@@ -237,7 +275,7 @@
     if (!slot) return;
     slot.querySelectorAll('.cover-img, canvas.cover-canvas').forEach(function (e) { e.remove(); });
     slot.classList.remove('has-cover');
-    var url = cfg.cover && S.np ? (S.np.cover || '') : '';
+    var url = coverOn(cfg) && S.np ? (S.np.cover || '') : '';
     if (!url) { S.coverUrl = ''; return; }
     if (url === S.coverUrl) { if (slot.querySelector('.cover-img, canvas.cover-canvas')) slot.classList.add('has-cover'); return; }
     S.coverUrl = url;
@@ -351,7 +389,7 @@
     if (t.scrollHeight <= max + 1) return;
     t.style.height = max + 'px';
     t.style.overflow = 'hidden';
-    marquee(t, S.np.title, false);
+    if (marqOn(cfg)) marquee(t, S.np.title, false);
   }
 
   function fitTitle(cfg) {
@@ -362,19 +400,19 @@
     t.style.overflow = 'hidden';
     t.style.whiteSpace = 'nowrap';
     if (cfg.style === 'code') {
-      if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
+      if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
       return;
     }
     if (cfg.style === 'winamp') {
       var wl = winampLine(cfg);
       t.textContent = wl;
       var box = t.parentElement;
-      if (box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
+      if (marqOn(cfg) && box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
       return;
     }
     // №7 «Нижняя лента»: справа эквалайзер, запаса нет — длинное название сразу бежит в своей колонке.
     if (cfg.style === 'ribbon') {
-      if (t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
+      if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) marquee(t, S.np.title, true);
       return;
     }
     var base = t.clientWidth;
@@ -391,7 +429,7 @@
       t.style.textAlign = dir === 'L' ? 'right' : dir === 'B' ? 'center' : 'left';
       S.root.querySelectorAll('.textcol, .title-line, .title-box').forEach(function (p) { p.style.overflow = 'visible'; });
     }
-    if (t.scrollWidth > t.clientWidth + 1) {
+    if (marqOn(cfg) && t.scrollWidth > t.clientWidth + 1) {
       var tx = S.np.title;
       t.textContent = '';
       t.textContent = tx;
@@ -410,7 +448,7 @@
     if (compactStyle(cfg)) {
       a.style.overflow = 'hidden';
       a.style.whiteSpace = 'nowrap';
-      if (a.scrollWidth > a.clientWidth + 1) marquee(a, S.np.artist || '', true);
+      if (marqOn(cfg) && a.scrollWidth > a.clientWidth + 1) marquee(a, S.np.artist || '', true);
       return;
     }
     a.style.overflow = 'visible';
@@ -803,8 +841,7 @@
     }
     if (FORCE_NICK === '1') { CFG.nick = true; CFG.motion.nick = true; }
     if (FORCE_NICK === '0') { CFG.nick = false; CFG.motion.nick = false; }
-    if (DEMO) setDemoConfig();
-    if (DEMO) startDemo();
+    if (DEMO) { setDemoConfig(); applyDemoFeatures(); startDemo(); }
     else {
       // До первого снимка показываем пустую сцену без текста.
       applyConfig(CFG);

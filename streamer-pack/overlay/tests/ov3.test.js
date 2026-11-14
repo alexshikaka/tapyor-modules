@@ -5,6 +5,9 @@ const assert = require('node:assert/strict');
 const {
   STYLE_DEFS, STYLES, FEATURE_KEYS, QUEUE_FEATURES, MOTION_FEATURE_KEYS, VIZ_KINDS
 } = require('../src/styles');
+const META = require('../page/styles-meta');
+const Demo = require('../page/demo');
+const { PAGE_FILES } = require('../src/index');
 
 const Q = ['count', 'fade', 'fill', 'nums'];
 const BASE = ['cover', 'osc', 'marq', ...Q];
@@ -66,6 +69,23 @@ test('OV3: очередь есть у всех стилей плейлиста, 
   for (const s of STYLE_DEFS) for (const k of Q) assert.ok(s.features.includes(k), s.id + ': нет ' + k);
   for (const k of Q) assert.equal(MOTION_FEATURE_KEYS.includes(k), false, 'моушн не должен знать ' + k);
   assert.deepEqual([...MOTION_FEATURE_KEYS], ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'viz', 'smooth']);
+});
+
+test('OV3: зеркало стилей на странице совпадает с src/styles.js', () => {
+  assert.deepEqual(Object.keys(META).sort(), [...STYLES].sort());
+  for (const s of STYLE_DEFS) {
+    assert.deepEqual(META[s.id].features, s.features, s.id + ': features на странице');
+    assert.equal(META[s.id].vizKind, s.vizKind, s.id + ': vizKind на странице');
+  }
+  assert.ok(PAGE_FILES['/styles-meta.js']);
+  assert.equal(PAGE_FILES['/styles-meta.js'][1], 'text/javascript; charset=utf-8');
+});
+
+test('OV3: демо-переопределения feat понимают 0/1, числа и строки', () => {
+  assert.deepEqual(Demo.parseFeat('cover:0,time:1,count:3,lang:en'), { cover: false, time: true, count: 3, lang: 'en' });
+  assert.deepEqual(Demo.parseFeat('lang:off,osc:on'), { lang: false, osc: true });
+  assert.deepEqual(Demo.parseFeat('bad, :1, x:'), {});
+  assert.deepEqual(Demo.options('?demo=1&style=card&feat=prog:0').feat, { prog: false });
 });
 
 test('OV3: особые ключи только там, где элементы реально есть', () => {

@@ -3,9 +3,13 @@
 [data-style="dos"] .cover-slot{width:56px;height:56px;border:3px solid var(--c);background:var(--bg)}
 [data-style="dos"] .textcol{flex:1 1 auto}
 [data-style="dos"] .title{font-size:24px}
-[data-style="dos"] .title::before{content:"TRACK : ";white-space:pre}
-[data-style="dos"] .artist::before{content:"ARTIST: ";white-space:pre}
-[data-style="dos"] .time::before{content:"▶ ";white-space:pre}
+[data-style="dos"][data-lang="en"] .title::before{content:"TRACK : ";white-space:pre}
+[data-style="dos"][data-lang="ru"] .title::before{content:"ТРЕК  : ";white-space:pre}
+[data-style="dos"][data-lang="en"] .artist::before{content:"ARTIST: ";white-space:pre}
+[data-style="dos"][data-lang="ru"] .artist::before{content:"АРТИСТ: ";white-space:pre}
+[data-style="dos"] .dos-status{display:flex;align-items:center;gap:4px}
+[data-style="dos"] .dos-spin{display:inline-block;font-size:18px;line-height:1;color:var(--c);animation:dos-spin 1.6s linear infinite}
+@keyframes dos-spin{to{transform:rotate(360deg)}}
 [data-style="dos"] .viz-sp{height:22px;margin:6px 0}
 [data-style="dos"] .vz-sp{display:flex;align-items:flex-end;gap:2px;height:100%}
 [data-style="dos"] .vz-sp i{flex:1;background:var(--c);height:10%;box-shadow:0 0 0 1.5px rgba(0,0,0,.6)}

@@ -27,6 +27,7 @@ const positions = (args.get('positions') || 'br,bc,bl,tr,tc,tl').split(',');
 const pages = (args.get('pages') || 'playlist,motion').split(',');
 const tracks = (args.get('tracks') || 'normal,medium,long').split(',');
 const shots = args.get('shots') === '1';
+const featuresMode = args.get('features') === '1';
 const coreDir = args.get('core') || process.env.TAPYOR_PLAYER || 'E:\\Tapyor\\Tapyor-player';
 
 // ---------- шрифты ядра: только чтение, копия во временную папку проверки ----------
@@ -172,7 +173,130 @@ const measured = await page.addInitScript(() => {
         artist: texts.find((x) => x.role === 'artist')?.rect, who: texts.find((x) => x.role === 'who')?.rect }
     };
   };
+  // Состояние переключателей «Что показывать»: что видно, какие подписи, очередь и подпись вида.
+  window.__ovFeature = () => {
+    const root = document.querySelector('.style-root');
+    if (!root) return { error: 'нет .style-root' };
+    const vis = (el) => {
+      if (!el || el.hidden) return false;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 || r.height > 0;
+    };
+    const box = (el) => {
+      if (!el || !vis(el)) return null;
+      const r = el.getBoundingClientRect();
+      return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+    };
+    const pseudo = (el, pe) => {
+      if (!el) return '';
+      try { return getComputedStyle(el, pe).content || ''; } catch (e) { return ''; }
+    };
+    const title = root.querySelector('[data-role="title"]');
+    const artist = root.querySelector('[data-role="artist"]');
+    const who = root.querySelector('[data-role="who"]');
+    const time = root.querySelector('[data-role="time"]');
+    const rows = [...root.querySelectorAll('.queue > div')];
+    const mq = root.querySelector('.mq, .mqv');
+    const viz = [...root.querySelectorAll('[data-role="viz"]')];
+    const visible = {
+      cover: vis(root.querySelector('[data-role="cover"]')),
+      time: vis(time),
+      spin: vis(root.querySelector('[data-role="spin"]')),
+      prog: vis(root.querySelector('[data-role="prog"]')),
+      osc: viz.some(vis),
+      marq: !!mq && vis(mq)
+    };
+    const labels = { title: pseudo(title, '::before'), artist: pseudo(artist, '::before'), time: pseudo(time, '::before') };
+    const secondOpacity = rows[1] ? getComputedStyle(rows[1]).opacity : '';
+    const sig = JSON.stringify({
+      style: root.dataset.style, visible, labels, queueRows: rows.length,
+      first: rows[0] ? rows[0].textContent : '', second: secondOpacity,
+      title: title ? title.textContent : '', artist: artist ? artist.textContent : '', who: who ? who.textContent : '',
+      boxes: [box(root), box(root.querySelector('[data-role="cover"]')), box(title), box(artist), box(who), box(time),
+        box(root.querySelector('[data-role="prog"]')), box(root.querySelector('[data-role="spin"]')), ...viz.map(box)]
+    });
+    return {
+      visible, labels, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
+      secondOpacity, sig,
+      titleInfo: title ? {
+        cls: title.className, cw: title.clientWidth, sw: title.scrollWidth,
+        w: title.style.width, flex: title.style.flex, overflow: getComputedStyle(title).overflow,
+        mq: title.querySelectorAll('.mq,.mqv').length
+      } : null
+    };
+  };
 });
+
+// ---------- режим --features: каждый ключ каждого стиля выкл/вкл ----------
+if (featuresMode) {
+  const ALL_FEATURES = ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'count', 'fade', 'fill', 'nums'];
+  const onVal = (k) => (k === 'count' ? '3' : k === 'lang' ? 'en' : '1');
+  const labelText = (l) => Object.values(l)
+    .filter((v) => v && v !== 'normal' && v !== 'none' && v !== '""').join(' ').trim();
+  let featureTotal = 0, featureBad = 0;
+  const featureFailures = [];
+  async function open(style, feat) {
+    errors.length = 0;
+    const suffix = feat ? '&feat=' + encodeURIComponent(feat) : '';
+    const url = `http://127.0.0.1:${port}/overlay/playlist?demo=1&style=${encodeURIComponent(style)}`
+      + `&pos=br&nick=1&track=long${suffix}`;
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForTimeout(380);
+    return { r: await page.evaluate(() => window.__ovFeature()), errs: [...new Set(errors)] };
+  }
+  for (const style of styles) {
+    const def = STYLE_DEFS.find((s) => s.id === style);
+    if (!def) continue;
+    const declared = def.features;
+    const base = await open(style, '');
+    featureTotal++;
+    if (base.errs.length) {
+      featureBad++; featureFailures.push({ style, key: 'базовый', msg: 'ошибки страницы', errs: base.errs });
+    }
+    for (const key of ALL_FEATURES) {
+      const off = await open(style, key + ':0');
+      const on = await open(style, key + ':' + onVal(key));
+      featureTotal += 2;
+      const fail = (msg, extra) => { featureBad++; featureFailures.push({ style, key, msg, ...extra }); };
+      if (off.errs.length || on.errs.length) { fail('ошибки страницы', { off: off.errs, on: on.errs }); continue; }
+      if (!declared.includes(key)) {
+        if (off.r.sig !== base.r.sig || on.r.sig !== base.r.sig) fail('чужой ключ изменил вид');
+        continue;
+      }
+      if (key === 'fill') {
+        // fill — ключ данных (добор из волны), разметка от него не зависит; проверяем в Node-тестах.
+        if (off.r.sig !== on.r.sig) fail('fill не должен менять разметку');
+        continue;
+      }
+      if (key === 'lang') {
+        if (labelText(off.r.labels) || !labelText(on.r.labels)) fail('подписи не переключаются', { off: off.r.labels, on: on.r.labels });
+        continue;
+      }
+      if (key === 'count') {
+        if (off.r.queueRows !== 0 || on.r.queueRows !== 3) fail('строки очереди не переключаются', { off: off.r.queueRows, on: on.r.queueRows });
+        continue;
+      }
+      if (key === 'fade') {
+        if (!(Number(off.r.secondOpacity) === 1 && Number(on.r.secondOpacity) < 1)) fail('затухание не переключается', { off: off.r.secondOpacity, on: on.r.secondOpacity });
+        continue;
+      }
+      if (key === 'nums') {
+        if (/^1\.\s/.test(off.r.firstText) || !/^1\.\s/.test(on.r.firstText)) fail('номера не переключаются', { off: off.r.firstText, on: on.r.firstText });
+        continue;
+      }
+      if (!off.r.visible[key] && on.r.visible[key]) continue;
+      fail('элемент не переключается', { off: off.r.visible[key], on: on.r.visible[key], titleInfo: on.r.titleInfo });
+    }
+    if (styles.indexOf(style) % 5 === 0) console.log('… features:', style, 'ошибок', featureBad);
+  }
+  console.log(JSON.stringify({ mode: 'features', total: featureTotal, bad: featureBad, failures: featureFailures.slice(0, 40) }, null, 2));
+  await browser.close();
+  server.close();
+  fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
+  process.exit(featureBad ? 1 : 0);
+}
 
 let total = 0, bad = 0, pageErrors = 0;
 const failures = [];
