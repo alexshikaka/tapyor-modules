@@ -85,6 +85,8 @@ class Overlay {
   }
 
   obsCount() { let n = 0; for (const cl of this.clients) if (!cl.preview) n++; return n; }
+  // OBS-источники, которые смотрят именно моушн-страницу: превью из окна настроек не считается.
+  motionObs() { let n = 0; for (const cl of this.clients) if (cl.page === 'motion' && !cl.preview) n++; return n; }
 
   // Ядро шлёт состояние плеера и уровни звука, только пока страницу кто-то смотрит.
   // Уровни нужны любой открытой странице: у каждого стиля есть визуализатор на живом звуке.
@@ -128,6 +130,17 @@ class Overlay {
 
   ping() { for (const cl of this.clients) this.send(cl, 'event: hb\ndata: 1\n\n'); }
 
+  // «Показать сейчас» из окна настроек: открытые моушн-страницы проигрывают появление с текущим треком.
+  previewMotion() {
+    let sent = 0;
+    for (const cl of this.clients) {
+      if (cl.page !== 'motion') continue;
+      this.send(cl, 'event: show\ndata: 1\n\n');
+      sent++;
+    }
+    return { sent };
+  }
+
   handle(req, res, sub, query) {
     const q = query || new URLSearchParams();
     const page = PAGE_FILES[sub === '/' ? '/playlist' : sub];
@@ -142,7 +155,7 @@ class Overlay {
     if (sub === '/events') {
       if (this.clients.size >= MAX_CLIENTS) { res.writeHead(503); res.end('too many clients'); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-      const cl = { res, preview: q.get('preview') === '1' };
+      const cl = { res, preview: q.get('preview') === '1', page: q.get('page') === 'motion' ? 'motion' : 'playlist' };
       res.write('retry: 2000\n\n');
       this.clients.add(cl);
       if (typeof res.on === 'function') res.on('error', () => { if (this.clients.delete(cl)) this.want(); });
@@ -172,7 +185,12 @@ class Overlay {
       case 'settings': return { ...this.cfg };
       case 'defaults': return { ...DEFAULTS };
       case 'save': {
-        this.cfg = normalize({ ...this.cfg, ...(data || {}) });
+        // motion сливаем глубоко: частичный патч не сбрасывает остальные поля моушна.
+        const patch = { ...(data || {}) };
+        if (patch.motion && typeof patch.motion === 'object' && !Array.isArray(patch.motion)) {
+          patch.motion = { ...this.cfg.motion, ...patch.motion };
+        }
+        this.cfg = normalize({ ...this.cfg, ...patch });
         this.core.settings.set('overlay', this.cfg);
         this.want();
         this.broadcast();
@@ -186,8 +204,10 @@ class Overlay {
         return { ...this.cfg };
       }
       case 'styles': return STYLE_DEFS.map((s) => ({ ...s }));
+      case 'preview-motion': return this.previewMotion();
       case 'status': return {
         obs: this.obsCount(),
+        motionObs: this.motionObs(),
         clients: this.clients.size,
         url: this.core.http.url ? this.core.http.url('/overlay/playlist') : '',
         motionUrl: this.core.http.url ? this.core.http.url('/overlay/motion') : ''

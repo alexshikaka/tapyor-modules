@@ -761,6 +761,8 @@
       } catch (x) {}
     });
     es.addEventListener('hb', function () { S.lastSse = Date.now(); });
+    // «Показать сейчас» из окна настроек: проиграть появление с текущим треком.
+    es.addEventListener('show', function () { if (MOTION) showMotion(); });
   }
 
   // ---------- демо ----------

@@ -129,7 +129,7 @@ test('OV1: моушн-страница по адресу, статус с motion
   assert.match(st.motionUrl, /\/overlay\/motion$/);
   const list = o.command('styles');
   assert.equal(list.length, 26); assert.deepEqual(list.map((s) => s.id), STYLES);
-  assert.deepEqual(Object.keys(list[0]).sort(), ['font', 'have', 'id', 'name', 'num']);
+  assert.deepEqual(Object.keys(list[0]).sort(), ['color', 'font', 'have', 'id', 'name', 'num', 'vizColor']);
   await o.stop();
 });
 
