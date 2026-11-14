@@ -178,6 +178,8 @@ let total = 0, bad = 0, pageErrors = 0;
 const failures = [];
 const fontsByStyle = new Map();
 const fontFailures = [];
+const gridShots = new Map();          // id стиля → PNG (br, плейлист, средний трек) для общей сетки
+let shotCount = 0;
 const shotsDir = path.join(root, '.dsh', 'shots');
 if (shots) fs.mkdirSync(shotsDir, { recursive: true });
 
@@ -224,7 +226,10 @@ for (const p of pages) {
             document.documentElement.style.background = '#151a22';
             document.body.style.background = '#151a22';
           });
-          await page.screenshot({ path: path.join(shotsDir, `${p}-${style}-${pos}-${track}.png`) });
+          const png = await page.screenshot();
+          shotCount++;
+          fs.writeFileSync(path.join(shotsDir, `${p}-${style}-${pos}-${track}.png`), png);
+          if (p === 'playlist' && pos === 'br' && track === 'medium') gridShots.set(style, png);
         }
         if ((total % 100) === 0) console.log('…', total, 'сочетаний, ошибок', bad);
       }
@@ -232,9 +237,53 @@ for (const p of pages) {
   }
 }
 
+// Общая картинка-сетка: все проверенные стили в br на тёмно-сером фоне, с подписями номеров.
+async function makeGrid(shotsMap) {
+  if (!shotsMap.size) return;
+  const defs = new Map(STYLE_DEFS.map((s) => [s.id, s]));
+  const items = styles.filter((id) => shotsMap.has(id)).map((id) => ({
+    id, num: defs.get(id) ? defs.get(id).num : '', name: defs.get(id) ? defs.get(id).name : id,
+    b64: shotsMap.get(id).toString('base64')
+  }));
+  const cols = 5, tileW = 384, tileH = 216, gap = 8, labelH = 26;
+  const rows = Math.ceil(items.length / cols);
+  const W = cols * tileW + (cols + 1) * gap;
+  const H = rows * (tileH + labelH) + (rows + 1) * gap;
+  const gp = await context.newPage();
+  await gp.setViewportSize({ width: W, height: H });
+  await gp.setContent('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
+  const dataUrl = await gp.evaluate(async (arg) => {
+    const cv = document.createElement('canvas');
+    cv.width = arg.W; cv.height = arg.H;
+    cv.style.display = 'block';
+    document.body.append(cv);
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#151a22'; ctx.fillRect(0, 0, arg.W, arg.H);
+    const imgs = await Promise.all(arg.items.map((x) => new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => resolve(null);
+      im.src = 'data:image/png;base64,' + x.b64;
+    })));
+    arg.items.forEach((x, i) => {
+      const col = i % arg.cols, row = Math.floor(i / arg.cols);
+      const px = arg.gap + col * (arg.tileW + arg.gap);
+      const py = arg.gap + row * (arg.tileH + arg.labelH + arg.gap);
+      if (imgs[i]) ctx.drawImage(imgs[i], px, py, arg.tileW, arg.tileH);
+      else { ctx.fillStyle = '#333'; ctx.fillRect(px, py, arg.tileW, arg.tileH); }
+      ctx.fillStyle = '#e8edf3'; ctx.font = '600 16px sans-serif'; ctx.textBaseline = 'middle';
+      ctx.fillText('№' + x.num + ' ' + x.name, px, py + arg.tileH + arg.labelH / 2 + 2);
+    });
+    return cv.toDataURL('image/png');
+  }, { items, cols, tileW, tileH, gap, labelH, W, H });
+  fs.writeFileSync(path.join(shotsDir, '_grid-playlist.png'), Buffer.from(dataUrl.split(',')[1], 'base64'));
+  await gp.close();
+}
+if (shots) await makeGrid(gridShots);
+
 const fonts = [...fontsByStyle].map(([style, f]) => ({ style, ...f }));
 const expected = new Map(STYLE_DEFS.map((s) => [s.id, s.font]));
-console.log(JSON.stringify({ total, bad, pageErrors, fontFailures, fonts, expectedFonts: Object.fromEntries(expected), failures: failures.slice(0, 30) }, null, 2));
+console.log(JSON.stringify({ total, bad, pageErrors, fontFailures, fonts, expectedFonts: Object.fromEntries(expected), shots: shotCount, failures: failures.slice(0, 30) }, null, 2));
 await browser.close();
 server.close();
 fs.rmSync(coreFonts.tmp, { recursive: true, force: true });
