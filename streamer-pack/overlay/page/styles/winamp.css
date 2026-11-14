@@ -1,8 +1,8 @@
 .style-root[data-style="winamp"]{width:340px;font:24px/1 "Pixelify Sans",monospace;color:var(--c)}
 [data-style="winamp"] .row{gap:10px;align-items:center}
 [data-style="winamp"] .cover-slot{width:56px;height:56px;border:3px solid var(--a2);background:var(--bg)}
-[data-style="winamp"] .winamp-time{font-size:50px;line-height:.9;white-space:nowrap;font-weight:700}
-[data-style="winamp"] .viz-g{flex:1;min-width:0;height:24px}
+[data-style="winamp"] .winamp-time{font-size:50px;line-height:.9;white-space:nowrap;font-weight:700;flex:none;min-width:0}
+[data-style="winamp"] .viz-g{flex:1;min-width:24px;height:24px}
 [data-style="winamp"] .vz-g{display:flex;gap:2px;height:100%}
 [data-style="winamp"] .led-col{flex:1;display:flex;flex-direction:column-reverse;gap:2px}
 [data-style="winamp"] .led{height:4px;background:transparent;box-shadow:0 0 0 1px rgba(0,0,0,.5)}

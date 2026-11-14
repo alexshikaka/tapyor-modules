@@ -74,6 +74,12 @@
     return line;
   }
 
+  // Очередь Winamp, как в макете: номер, исполнитель, название.
+  function winampQueueRow(item, i, nums) {
+    var t = item || {};
+    return (nums ? (i + 1) + '. ' : '') + (t.artist ? t.artist + ' - ' : '') + (t.title || '');
+  }
+
   var api = {
     GAP: GAP,
     marqueeText: marqueeText,
@@ -83,7 +89,8 @@
     titleBox: titleBox,
     motionExtra: motionExtra,
     winampClock: winampClock,
-    winampText: winampText
+    winampText: winampText,
+    winampQueueRow: winampQueueRow
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TapTextFit = api;

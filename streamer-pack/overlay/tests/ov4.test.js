@@ -41,3 +41,28 @@ test('OV4 №8: высоты хватает тексту — бегущая ст
   assert.equal(T.verticalPlan(300, 301, 300).run, false);
   assert.equal(T.verticalPlan(300, 302, 300).run, true);
 });
+
+test('OV4 №11: крупное время Winamp — только текущая позиция', () => {
+  assert.equal(T.winampClock(92), '01:32');
+  assert.equal(T.winampClock(0), '00:00');
+  assert.equal(T.winampClock(3723), '1:02:03');
+  assert.equal(T.winampClock(-5), '--:--');
+  assert.equal(T.winampClock(NaN), '--:--');
+  assert.ok(!T.winampClock(92).includes('/'), 'длительности в крупном времени нет');
+});
+
+test('OV4 №11: строка «*** исполнитель - название ***»', () => {
+  const np = { title: 'Midnight City', artist: 'M83' };
+  assert.equal(T.winampText(np, false, ''), '*** M83 - Midnight City ***');
+  assert.equal(T.winampText(np, true, 'dimon_play'), '*** M83 - Midnight City · заказ: dimon_play ***');
+  assert.equal(T.winampText(np, true, ''), '*** M83 - Midnight City ***', 'без ника строка не меняется');
+  assert.equal(T.winampText({ title: 'Без исполнителя', artist: '' }, false), '*** — - Без исполнителя ***');
+  assert.equal(T.winampText(null, true, 'x'), '');
+});
+
+test('OV4 №11: очередь Winamp — исполнитель, затем название', () => {
+  const it = { title: 'Хочешь?', artist: 'Земфира' };
+  assert.equal(T.winampQueueRow(it, 0, true), '1. Земфира - Хочешь?');
+  assert.equal(T.winampQueueRow(it, 2, false), 'Земфира - Хочешь?');
+  assert.equal(T.winampQueueRow({ title: 'Своя' }, 0, false), 'Своя');
+});

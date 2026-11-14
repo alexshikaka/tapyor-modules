@@ -205,11 +205,7 @@
   }
 
   function winampLine(cfg) {
-    var np = S.np;
-    if (!np) return '';
-    var line = '*** ' + (np.artist || '—') + ' - ' + np.title + ' ***';
-    if (cfg.nick && np.who) line = line.replace(/ \*\*\*$/, ' · заказ: ' + np.who + ' ***');
-    return line;
+    return T.winampText(S.np, cfg.nick, S.np && S.np.who);
   }
 
   function setTexts(cfg) {
@@ -250,8 +246,12 @@
     q.textContent = '';
     list.forEach(function (it, i) {
       var d = document.createElement('div');
-      var pref = numsOn ? (i + 1) + '. ' : '';
-      d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
+      if (cfg.style === 'winamp') {
+        d.textContent = T.winampQueueRow(it, i, numsOn);
+      } else {
+        var pref = numsOn ? (i + 1) + '. ' : '';
+        d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
+      }
       if (cfg.nick && it.who) {
         var w = document.createElement('span');
         w.className = 'q-who';
@@ -268,9 +268,16 @@
     var np = S.np;
     if (!S.roles.time || !np) return;
     var pos = D.posAt(np, Date.now()), paused = !np.playing;
-    var t = D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--');
-    var ru = cfg.lang === 'ru' && hasFeature(cfg.style, 'lang');
-    if (paused) t += ' · ' + (ru ? 'ПАУЗА' : 'PAUSED');
+    var t;
+    if (cfg.style === 'winamp') {
+      // Winamp: крупное время — только текущая позиция (в макете «01:32», без «/04:03»),
+      // иначе 50-пиксельные цифры занимают всю строку и душат эквалайзер.
+      t = T.winampClock(pos);
+    } else {
+      t = D.fmtTime(pos) + '/' + (np.dur > 0 ? D.fmtTime(np.dur) : '--:--');
+      var ru = cfg.lang === 'ru' && hasFeature(cfg.style, 'lang');
+      if (paused) t += ' · ' + (ru ? 'ПАУЗА' : 'PAUSED');
+    }
     if (S.roles.time.textContent !== t) S.roles.time.textContent = t;
     if (S.roles.prog) {
       var p = S.roles.prog;
@@ -427,6 +434,10 @@
       var wl = winampLine(cfg);
       t.textContent = wl;
       var box = t.parentElement;
+      // Строка занимает всю ширину строки Winamp: так её край совпадает с краем оверлея,
+      // а бегущая копия не растягивает коробку на всю длину текста.
+      t.style.display = 'block';
+      t.style.width = '100%';
       if (marqOn(cfg) && box && t.scrollWidth > box.clientWidth + 1) marquee(t, wl, true);
       return;
     }
