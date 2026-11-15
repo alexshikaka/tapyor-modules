@@ -266,10 +266,18 @@ test('страница отдаёт только свои файлы', () => {
   assert.equal(keys.includes('/fonts/../index.js'), false);
 });
 
-test('ничего не играет: вместо заглушки — «Джон Кейдж — Пьеса 4′33″» целиком (15.11)', () => {
-  const f = buildFeed(normalize({}), { np: null, next: [], after: [] });
+test('ничего не играет: «Джон Кейдж — Пьеса 4′33″» выглядит как играющий трек, очередь — шуточная (15.11)', () => {
+  const { SILENCE_NEXT } = require('../src/feed');
+  const cfg = normalize({ count: 10 });
+  const f = buildFeed(cfg, { np: null, next: [], after: [] });
   assert.equal(f.np.artist, 'Джон Кейдж'); assert.equal(f.np.title, 'Пьеса 4′33″');
-  assert.equal(f.np.silence, true); assert.equal(f.np.playing, false); assert.equal(f.np.dur, 273);
-  const g = buildFeed(normalize({}), { np: { title: 'Хочешь?', artist: 'Земфира', playing: true }, next: [] });
-  assert.equal(g.np.title, 'Хочешь?'); assert.equal(g.np.silence, undefined);
+  assert.equal(f.np.silence, true); assert.equal(f.np.playing, true); assert.equal(f.np.dur, 273);
+  assert.ok(f.np.pos >= 0 && f.np.pos < 273);
+  assert.equal(SILENCE_NEXT.length, 10); assert.equal(f.next.length, 10);
+  assert.equal(f.next[0].title, 'Ещё один трек'); assert.equal(f.next[2].title, 'Печальный трек');
+  // Настоящая очередь важнее шуточной; настоящий трек сбрасывает тишину.
+  const q = buildFeed(cfg, { np: null, next: [{ title: 'Хочешь?', artist: 'Земфира' }] });
+  assert.equal(q.next.length, 1); assert.equal(q.next[0].title, 'Хочешь?');
+  const g = buildFeed(cfg, { np: { title: 'Хочешь?', artist: 'Земфира', playing: true }, next: [] });
+  assert.equal(g.np.title, 'Хочешь?'); assert.equal(g.np.silence, undefined); assert.equal(g.next.length, 0);
 });

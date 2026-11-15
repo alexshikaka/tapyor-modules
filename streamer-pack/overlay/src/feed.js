@@ -49,16 +49,39 @@ function nextList(cfg, snap) {
   return out;
 }
 
-// Ничего не играет — вместо заглушки «ТИШИНА» оверлей показывает целиком «трек тишины» (решение владельца 15.11).
+// Ничего не играет — вместо заглушки «ТИШИНА» оверлей показывает целиком «трек тишины» (решения владельца 15.11):
+// выглядит как играющий — время идёт 0:00…4:33 по кругу, визуализатор работает в демо-режиме (страница без звука
+// рисует имитацию), очередь — шуточные треки, если настоящей очереди нет.
 // silence: true — для страницы: это не настоящий трек (моушн не считает его сменой трека для OBS).
-function silenceNp() {
-  return { title: 'Пьеса 4′33″', artist: 'Джон Кейдж', who: '', cover: '', pos: 0, dur: 273, playing: false, at: Date.now(), silence: true };
+const SILENCE_DUR = 273;
+const SILENCE_NEXT = [
+  ['Ещё один трек', 'Ещё один исполнитель'],
+  ['Какой-то трек', 'Какой-то исполнитель'],
+  ['Печальный трек', 'Печальный исполнитель'],
+  ['Подозрительно весёлый трек', 'Подозрительно весёлый исполнитель'],
+  ['Трек, который никто не заказывал', 'Никто'],
+  ['Ещё один трек (ремикс)', 'Ещё один исполнитель feat. Ещё один'],
+  ['Трек для фона', 'Фоновый ансамбль'],
+  ['Почти хит', 'Почти знаменитый исполнитель'],
+  ['Трек без названия', 'Исполнитель без имени'],
+  ['Последний трек', 'Наконец-то исполнитель']
+].map(([title, artist]) => ({ title, artist }));
+let silenceSince = 0;   // когда началась тишина: время «трека» идёт от этой точки и не сбрасывается при каждом снимке
+
+function silenceNp(now = Date.now()) {
+  if (!silenceSince) silenceSince = now;
+  const pos = ((now - silenceSince) / 1000) % SILENCE_DUR;
+  return { title: 'Пьеса 4′33″', artist: 'Джон Кейдж', who: '', cover: '', pos, dur: SILENCE_DUR, playing: true, at: now, silence: true };
 }
 
 function buildFeed(cfg, rawSnap) {
   const snap = cleanSnap(rawSnap);
-  const np = snap.np ? { ...snap.np, cover: coverFor(snap.np.cover) } : silenceNp();
-  return { cfg, np, next: nextList(cfg, snap) };
+  if (snap.np) {
+    silenceSince = 0;
+    return { cfg, np: { ...snap.np, cover: coverFor(snap.np.cover) }, next: nextList(cfg, snap) };
+  }
+  const quiet = snap.next.length ? snap : { ...snap, next: SILENCE_NEXT, after: [] };
+  return { cfg, np: silenceNp(), next: nextList(cfg, quiet) };
 }
 
-module.exports = { buildFeed, cleanSnap, nextList, coverFor, silenceNp };
+module.exports = { buildFeed, cleanSnap, nextList, coverFor, silenceNp, SILENCE_NEXT };
