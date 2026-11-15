@@ -15,3 +15,9 @@
 [data-style="vtitle"][data-h="c"] .vz-bw{align-items:center}
 [data-style="vtitle"] .vz-bw i{height:4px;background:var(--v)}
 [data-style="vtitle"] .queue{font-size:19px}
+/* Короткое название прижато к краю угла: вверху — к верху колонки, внизу — к низу.
+   Слева строка повёрнута на 180°, поэтому её «начало» внизу, а справа — вверху. */
+[data-style="vtitle"] .vtitle-title{text-align:start}
+[data-style="vtitle"][data-v="t"] .vtitle-title{text-align:end}
+[data-style="vtitle"][data-h="r"] .vtitle-title{text-align:end}
+[data-style="vtitle"][data-h="r"][data-v="t"] .vtitle-title{text-align:start}
