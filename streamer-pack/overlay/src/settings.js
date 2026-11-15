@@ -42,6 +42,7 @@ const DEFAULTS = Object.freeze({
   vizColor: '#FFB000', // цвет визуализатора
   outline: true,      // чёрная пиксельная обводка
   nick: true,         // показывать ник заказавшего (если ядро его прислало)
+  swap: true,         // анимация смены трека в плейлисте (облегчённая фирменная, 15.11)
   count: 3,           // сколько песен «дальше», 0–10
   fade: true,         // затухание строк списка
   fadePct: 100,       // сила затухания, 0–100
@@ -59,7 +60,7 @@ const DEFAULTS = Object.freeze({
   motion: MOTION_DEFAULTS
 });
 
-const BOOL = ['outline', 'nick', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
+const BOOL = ['outline', 'nick', 'swap', 'fill', 'nums', 'cover', 'time', 'spin', 'osc', 'prog', 'marq', 'fade'];
 const MOTION_BOOL = ['outline', 'nick', 'cover', 'time', 'spin', 'osc', 'prog', 'marq'];
 
 function clampNum(v, lo, hi, def) {

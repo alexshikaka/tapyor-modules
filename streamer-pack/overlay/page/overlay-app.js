@@ -43,7 +43,7 @@
   function pageDefaults() {
     return {
       style: 'dos', pos: 'br', dx: 0, dy: 0, size: 100,
-      color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true,
+      color: '#FFB000', vizColor: '#FFB000', outline: true, nick: true, swap: true,
       count: 3, fade: true, fadePct: 100, nums: true, cover: true,
       time: true, osc: true, prog: true, marq: true, lang: 'en', viz: 'wave', smooth: 'mid',
       motion: {
@@ -967,6 +967,88 @@
     return [mix(f()), end];
   }
 
+  // ---------- смена трека в плейлисте (15.11) ----------
+  // Та же «фирменная» анимация стиля, что в моушне, но облегчённая: только блок играющего трека
+  // (обложка, название, исполнитель, ник), сдвиги/повороты/размытие ~в 3 раза меньше, без линий и подводки.
+  // Уход ~0,22 с, появление ~0,45 с с небольшим разбегом; очередь мягко сдвигается на одну строку.
+  function swapAllowed() {
+    return !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) && !document.hidden;
+  }
+  function swapItems() {
+    return [['c', S.roles.cover], ['t', S.roles.title], ['a', S.roles.artist], ['a', S.roles.who]]
+      .filter(function (x) { return x[1] && !x[1].hidden && x[1].offsetParent; });
+  }
+  function swapParams(cfg) {
+    var c = applyOverrides(cfg && cfg.style ? cfg : currentCfg());
+    var h = (c.pos || 'br')[1], bt = (c.pos || 'br')[0] === 'b';
+    var o = { ox: h === 'r' ? 30 : h === 'l' ? -30 : 0, oy: h === 'c' ? (bt ? 18 : -18) : (bt ? 12 : -12) };
+    o.hid = o.ox > 0 ? 'inset(0 0 0 100%)' : o.ox < 0 ? 'inset(0 100% 0 0)' : bt ? 'inset(100% 0 0 0)' : 'inset(0 0 100% 0)';
+    return { kind: BRAND[c.style] || 'slide', o: o, h: h, bt: bt };
+  }
+  // Облегчённые кадры: тот же характер движения, что у motionFrames, но мягче.
+  function lightFrames(p, r, e, o) {
+    var b = e._b && e._b !== 'none' ? e._b : '';
+    var T = function (s) { return (s + (b ? ' ' + b : '')).trim() || 'none'; };
+    var end = { opacity: 1, transform: b || 'none', clipPath: 'inset(0 0 0 0)', filter: e._f && e._f !== 'none' ? e._f : 'none' };
+    var mix = function (x) { var y = {}; for (var k in end) y[k] = end[k]; for (var m in x) y[m] = x[m]; return y; };
+    if (p === 'glitch') return [
+      mix({ opacity: 0, transform: T('translateX(' + (o.ox / 3 || -6) + 'px) skewX(10deg)'), filter: 'hue-rotate(60deg)' }),
+      mix({ transform: T('translateX(' + (-(o.ox / 4) || 4) + 'px) skewX(-6deg)'), filter: 'hue-rotate(-30deg)', offset: 0.35 }),
+      end];
+    var f = {
+      slide: { opacity: 0, transform: T('translate(' + o.ox + 'px,' + o.oy + 'px)') },
+      pop: { opacity: 0, transform: T(r === 'c' ? 'scale(.7) rotate(-6deg)' : 'scale(.88)') },
+      wipe: { clipPath: o.hid },
+      type: r === 'c' ? { opacity: 0 } : { clipPath: 'inset(0 100% 0 0)' },
+      flip: { opacity: 0, transform: T(r === 'c' ? 'perspective(500px) rotateY(60deg)' : 'perspective(500px) rotateX(-60deg)') },
+      spin: r === 'c' ? { opacity: 0, transform: T('rotate(-140deg) scale(.6)') } : { opacity: 0, transform: T('translate(' + (o.ox / 2) + 'px,' + (o.oy / 2) + 'px)') },
+      blur: { opacity: 0, filter: 'blur(6px)', transform: T('scale(1.08)') },
+      drop: { opacity: 0, transform: T('translateY(' + (o.oy * 1.6) + 'px) rotate(' + (r === 'c' ? -6 : 2) + 'deg)') },
+      curtain: { clipPath: r === 'c' ? 'inset(50% 0 50% 0)' : 'inset(0 50% 0 50%)' }
+    }[p] || { opacity: 0 };
+    return [mix(f), end];
+  }
+  function prepSwap(items, P) {
+    items.forEach(function (x) {
+      var e = x[1];
+      if (getComputedStyle(e).display === 'inline') e.style.display = 'inline-block';
+      var s = getComputedStyle(e);
+      if (!e._swapBase) { e._b = s.transform; e._f = s.filter; e._swapBase = true; }
+      if (e._b === 'none') e.style.transformOrigin = x[0] === 'c' ? '50% 50%' : (P.h === 'r' ? '100% 50%' : P.h === 'c' ? '50% 50%' : '0 50%');
+    });
+  }
+  function swapOut(cfg, done) {
+    var P = swapParams(cfg), items = swapItems(), anims = [], end = 0;
+    prepSwap(items, P);
+    items.slice().reverse().forEach(function (x, i) {
+      try {
+        anims.push(x[1].animate(lightFrames(P.kind, x[0], x[1], P.o), { duration: 220, delay: i * 40, direction: 'reverse', easing: MEZ[P.kind] || MEZ.slide, fill: 'both' }));
+      } catch (e) {}
+      end = Math.max(end, i * 40 + 220);
+    });
+    S.swapAnims = anims;
+    setTimeout(function () { done(); }, end + 20);
+  }
+  function swapIn() {
+    (S.swapAnims || []).forEach(function (a) { try { a.cancel(); } catch (e) {} });
+    S.swapAnims = [];
+    if (!S.root) return;
+    var P = swapParams(currentCfg()), items = swapItems();
+    prepSwap(items, P);
+    var delays = { c: 0, t: 60, a: 110 };
+    items.forEach(function (x, i) {
+      try {
+        x[1].animate(lightFrames(P.kind, x[0], x[1], P.o), { duration: 450, delay: (delays[x[0]] || 0) + (i > 2 ? 40 : 0), easing: MEZ[P.kind] || MEZ.slide, fill: 'backwards' });
+      } catch (e) {}
+    });
+    // Очередь мягко сдвигается на одну строку: верхняя ушла в «играет сейчас».
+    var q = S.roles.queue;
+    if (q && !q.hidden && q.firstElementChild) {
+      var rowH = q.firstElementChild.offsetHeight || 20;
+      try { q.animate([{ transform: 'translateY(' + (P.bt ? -rowH : rowH) + 'px)', opacity: 0.6 }, { transform: 'none', opacity: 1 }], { duration: 450, delay: 60, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'backwards' }); } catch (e) {}
+    }
+  }
+
   function noteTrack(np) {
     if (!np) { S.trackKey = ''; return; }
     var key = np.title + '|' + np.artist;
@@ -991,6 +1073,27 @@
     if (!d || !d.cfg) return;
     // В демо-режиме настройки и трек заданы ссылкой, живой поток их не перебивает.
     if (DEMO) return;
+    // Плейлист: смена трека — облегчённая «фирменная» анимация стиля (15.11). Пока старый трек уходит,
+    // новые данные копятся и применяются разом, когда он ушёл.
+    if (!MOTION) {
+      if (S.swapping) { S.pendingFeed = d; return; }
+      var key = d.np ? d.np.title + '|' + d.np.artist : '';
+      if (S.root && S.trackKey && key && key !== S.trackKey && d.cfg.swap !== false && swapAllowed()) {
+        S.trackKey = key;
+        S.swapping = true;
+        swapOut(d.cfg, function () {
+          S.swapping = false;
+          var next = S.pendingFeed || d; S.pendingFeed = null;
+          applyFeedNow(next);
+          swapIn();
+        });
+        return;
+      }
+    }
+    applyFeedNow(d);
+  }
+
+  function applyFeedNow(d) {
     var cfg = d.cfg;
     // Превью моушна: любое изменение настроек работает как «Показать сейчас».
     var sig = MOTION ? motionSig(cfg.motion) : '';
