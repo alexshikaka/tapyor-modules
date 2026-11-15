@@ -49,10 +49,16 @@ function nextList(cfg, snap) {
   return out;
 }
 
+// Ничего не играет — вместо заглушки «ТИШИНА» оверлей показывает целиком «трек тишины» (решение владельца 15.11).
+// silence: true — для страницы: это не настоящий трек (моушн не считает его сменой трека для OBS).
+function silenceNp() {
+  return { title: 'Пьеса 4′33″', artist: 'Джон Кейдж', who: '', cover: '', pos: 0, dur: 273, playing: false, at: Date.now(), silence: true };
+}
+
 function buildFeed(cfg, rawSnap) {
   const snap = cleanSnap(rawSnap);
-  const np = snap.np ? { ...snap.np, cover: coverFor(snap.np.cover) } : null;
+  const np = snap.np ? { ...snap.np, cover: coverFor(snap.np.cover) } : silenceNp();
   return { cfg, np, next: nextList(cfg, snap) };
 }
 
-module.exports = { buildFeed, cleanSnap, nextList, coverFor };
+module.exports = { buildFeed, cleanSnap, nextList, coverFor, silenceNp };

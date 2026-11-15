@@ -265,3 +265,11 @@ test('страница отдаёт только свои файлы', () => {
   assert.equal(keys.includes('/fonts.css'), false);
   assert.equal(keys.includes('/fonts/../index.js'), false);
 });
+
+test('ничего не играет: вместо заглушки — «Джон Кейдж — Пьеса 4′33″» целиком (15.11)', () => {
+  const f = buildFeed(normalize({}), { np: null, next: [], after: [] });
+  assert.equal(f.np.artist, 'Джон Кейдж'); assert.equal(f.np.title, 'Пьеса 4′33″');
+  assert.equal(f.np.silence, true); assert.equal(f.np.playing, false); assert.equal(f.np.dur, 273);
+  const g = buildFeed(normalize({}), { np: { title: 'Хочешь?', artist: 'Земфира', playing: true }, next: [] });
+  assert.equal(g.np.title, 'Хочешь?'); assert.equal(g.np.silence, undefined);
+});
