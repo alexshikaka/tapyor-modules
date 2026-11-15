@@ -1179,7 +1179,7 @@
       // До первого снимка показываем пустую сцену без текста.
       applyConfig(CFG);
     }
-    connectEvents();
+    if (!DEMO) connectEvents();   // демо (сайт, превью без ядра) — без запросов к локальному серверу
     setInterval(function () {
       if (S.np) {
         updateTime(currentCfg());
@@ -1188,7 +1188,7 @@
           applyConfig(CFG);
         }
       }
-      if (Date.now() - S.lastSse > 15000) connectEvents();
+      if (!DEMO && Date.now() - S.lastSse > 15000) connectEvents();
     }, 1000);
     setInterval(function () { if (S.np) updateTime(currentCfg()); }, 250);
     if (MOTION) setInterval(function () {
