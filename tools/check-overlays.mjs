@@ -1313,12 +1313,13 @@ if (motionMode) {
       }
       if (stable(a) === stable(b)) fail(key, 'страница не изменилась', { off: a, on: b });
     }
-    // Длительность показа: hold=3 скрывается раньше, hold=9 — позже 5 с.
+    // Длительность показа (15.11, как в образце): hold отсчитывается после появления, потом уход наоборот (~1 с).
+    // hold=3 — скрыто через 3…7,5 с от начала; hold=9 — не раньше 7,5 с.
     mChecks += 2;
-    const short = await hideDelay({ ...BASE, hold: 3 }, 5200);
-    if (!(short && short > 2400 && short < 5200)) fail('hold', 'hold=3 не скрывает за ~3 с', { short });
-    const long = await hideDelay({ ...BASE, hold: 9 }, 5200);
-    if (long != null) fail('hold', 'hold=9 скрывает раньше 5 с', { long });
+    const short = await hideDelay({ ...BASE, hold: 3 }, 7500);
+    if (!(short && short > 3000 && short < 7500)) fail('hold', 'hold=3 не скрывает за 3…7,5 с', { short });
+    const long = await hideDelay({ ...BASE, hold: 9 }, 7500);
+    if (long != null) fail('hold', 'hold=9 скрывает раньше 7,5 с', { long });
     console.log('… motion:', preview ? 'превью' : 'OBS', 'проверок', mChecks, 'ошибок', mBad);
   }
 
@@ -1355,7 +1356,7 @@ if (motionMode) {
   overlay.command('preview-motion');
   await page.waitForTimeout(300);
   if (await isHidden()) failLife('obs-show', '«Показать сейчас» не показало моушн в OBS', {});
-  await page.waitForTimeout(4200);
+  await page.waitForTimeout(6500);   // появление ~1 с + hold 3 с + уход наоборот ~1 с
   if (!(await isHidden())) failLife('obs-hide', 'в OBS не спряталось после hold', {});
   await page.waitForTimeout(1500);
   if (!(await isHidden())) failLife('obs-loop', 'в OBS пошёл бесконечный цикл', {});

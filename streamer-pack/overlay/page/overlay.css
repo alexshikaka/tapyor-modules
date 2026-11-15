@@ -193,6 +193,13 @@ body.idle #ov { display: none; }
   border-radius: 14px;
 }
 #ov.motion-plate-on .motion-plate { display: block; }
+/* Как в образце: подводка с размытием фона и акцентной полосой 5 px со стороны края; у пиксельных — без скругления. */
+.motion-plate { overflow: hidden; backdrop-filter: blur(8px); }
+.style-root.pixel .motion-plate { border-radius: 0; }
+.motion-stripe { position: absolute; top: 0; bottom: 0; left: 0; width: 5px; background: var(--stripe, var(--v)); }
+.style-root[data-h="r"] .motion-stripe { left: auto; right: 0; }
+.motion-line { position: absolute; left: 0; right: 0; height: 4px; pointer-events: none; }
+.motion-line[hidden] { display: none; }
 #ov.motion-hidden { visibility: hidden; }
 #ov.motion-in { visibility: visible; }
 

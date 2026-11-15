@@ -167,7 +167,11 @@
     }
     if (MOTION) {
       var plate = K.h('div', 'motion-plate');
+      plate.appendChild(K.h('i', 'motion-stripe'));   // акцентная полоса подводки со стороны края экрана
       root.prepend(plate);
+      var mline = K.h('i', 'motion-line');            // акцентная линия сценариев «Выезд» и «Маска»
+      mline.hidden = true;
+      root.appendChild(mline);
       root.dataset.noqueue = '1';
       var q = root.querySelector('[data-role="queue"]');
       if (q) q.hidden = true;
@@ -823,48 +827,87 @@
     S.root.style.visibility = 'visible';
     fitPlate();
     var root = S.root;
-    var dur = 700;
-    var ease = 'cubic-bezier(.16,1,.3,1)';
-    var items = [S.roles.cover, S.roles.title, S.roles.artist, S.roles.who, S.roles.viz].filter(Boolean);
+    // 15.11: движок анимаций — перенос из образца владельца (obs-overlays-all-27, раздел 4а ТЗ).
+    // «Фирменный» — свой вид у каждого стиля (BRAND); у обложки, названия, исполнителя и визуализатора
+    // свои движения (kfs); «Выезд» и «Маска» чертят акцентную линию, «Подводка» — плашку с полосой.
+    // Уход — то же появление в обратном порядке (без затухания всего оверлея).
+    var kind = scene === 'brand' ? (BRAND[cfg.style] || 'slide') : scene;
+    var h = cfg.pos[1], bt = cfg.pos[0] === 'b';
+    var o = { ox: h === 'r' ? 90 : h === 'l' ? -90 : 0, oy: h === 'c' ? (bt ? 60 : -60) : (bt ? 36 : -36) };
+    o.hid = o.ox > 0 ? 'inset(0 0 0 100%)' : o.ox < 0 ? 'inset(0 100% 0 0)' : bt ? 'inset(100% 0 0 0)' : 'inset(0 0 100% 0)';
+    var tm = MTM[kind];
+    var ease = MEZ[kind] || MEZ.slide;
     function anim(el, frames, opt) {
-      if (!el || !el.animate) return;
-      try { S.motionAnims.push(el.animate(frames, opt)); } catch (e) {}
+      if (!el || !el.animate) return null;
+      try { var a = el.animate(frames, opt); S.motionAnims.push(a); return a; } catch (e) { return null; }
     }
-    if (reduce) {
-      anim(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 320, fill: 'both' });
-      dur = 320;
-    } else if (scene === 'rush') {
-      var dir = cfg.pos[1] === 'r' ? 1 : -1;
-      anim(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 260, fill: 'both', easing: 'ease-out' });
-      items.forEach(function (el, i) {
-        anim(el, [{ opacity: 0, transform: 'translateX(' + (dir * 90) + 'px)' }, { opacity: 1, transform: 'translateX(0)' }],
-          { duration: 620, delay: i * 80, easing: ease, fill: 'both' });
+    // Порядок внимания: обложка → название → исполнитель (и ник, время) → визуализатор.
+    var L = [
+      ['c', S.roles.cover, tm ? tm.d[0] : 0, tm ? tm.du : 800],
+      ['t', S.roles.title, tm ? tm.d[1] : 200, tm ? tm.du : (kind === 'type' ? 1000 : 700)],
+      ['a', S.roles.artist, tm ? tm.d[2] : 350, tm ? tm.du : (kind === 'type' ? 800 : 650)],
+      ['a', S.roles.who, (tm ? tm.d[2] : 350) + 60, tm ? tm.du : 650],
+      ['a', S.roles.time, (tm ? tm.d[2] : 350) + 90, tm ? tm.du : 650],
+      ['v', S.roles.viz, tm ? tm.d[3] : 500, tm ? tm.du : 700],
+      ['v', S.roles.prog, (tm ? tm.d[3] : 500) + 60, tm ? tm.du : 700]
+    ].filter(function (x) { return x[1] && !x[1].hidden && x[1].offsetParent; });
+    L.forEach(function (x) {
+      var e = x[1], r = x[0];
+      if (getComputedStyle(e).display === 'inline') e.style.display = 'inline-block';
+      e.style.transform = ''; e.style.filter = '';
+      var s = getComputedStyle(e);
+      e._b = s.transform; e._f = s.filter;
+      // Точку поворота у элементов с собственным поворотом не трогаем (иначе они сдвигаются).
+      if (s.transform === 'none') e.style.transformOrigin = r === 'v' ? (bt ? '50% 100%' : '50% 0') : r === 'c' ? '50% 50%' : (h === 'r' ? '100% 50%' : h === 'c' ? '50% 50%' : '0 50%');
+    });
+    var line = root.querySelector('.motion-line'), pl = root.querySelector('.motion-plate');
+    var accent = getComputedStyle(S.roles.artist || S.roles.title || root).color;
+    if (line) {
+      line.hidden = reduce || !(kind === 'rush' || kind === 'mask');
+      line.style.background = accent;
+      line.style.top = bt ? '-12px' : ''; line.style.bottom = bt ? '' : '-12px';
+    }
+    if (pl) pl.style.setProperty('--stripe', accent);
+    var F0 = 'inset(0 0 0 0)';
+    anim(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, fill: 'both' });
+    var introEnd = 300;
+    if (!reduce) {
+      L.forEach(function (x) {
+        anim(x[1], motionFrames(kind, x[0], x[1], o), { duration: x[3], delay: x[2], easing: ease, fill: 'both' });
+        introEnd = Math.max(introEnd, x[2] + x[3]);
       });
-    } else if (scene === 'mask') {
-      anim(root, [{ clipPath: 'inset(0 0 100% 0)', opacity: 0 }, { clipPath: 'inset(0 0 0 0)', opacity: 1 }],
-        { duration: 820, easing: ease, fill: 'both' });
-      items.forEach(function (el, i) {
-        anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 500, delay: 120 + i * 60, easing: 'ease-out', fill: 'both' });
-      });
-    } else if (scene === 'plate') {
-      var pl = root.querySelector('.motion-plate');
-      if (pl) anim(pl, [{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 620, easing: ease, fill: 'both' });
-      anim(root, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'translateY(0)' }],
-        { duration: 620, easing: ease, fill: 'both' });
-    } else {
-      var off = cfg.pos[1] === 'r' ? 70 : cfg.pos[1] === 'l' ? -70 : 0;
-      anim(root, [{ opacity: 0, transform: 'translate(' + off + 'px,28px)' }, { opacity: 1, transform: 'translate(0,0)' }],
-        { duration: 700, easing: ease, fill: 'both' });
-      items.forEach(function (el, i) {
-        anim(el, [{ opacity: 0 }, { opacity: 1 }], { duration: 520, delay: 80 + i * 70, easing: 'ease-out', fill: 'both' });
-      });
+      if (pl && scene === 'plate') { anim(pl, [{ clipPath: o.hid }, { clipPath: F0 }], { duration: 520, easing: ease, fill: 'both' }); introEnd = Math.max(introEnd, 740); }
+      if (line && !line.hidden) {
+        line.style.transformOrigin = h === 'r' ? '100% 50%' : h === 'c' ? '50% 50%' : '0 50%';
+        anim(line, [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: 540, delay: kind === 'mask' ? 60 : 0, easing: ease, fill: 'both' });
+        introEnd = Math.max(introEnd, 600);
+      }
     }
     var hold = M.holdSeconds(cfg.hold);
     // Центровка по видимому — после того, как браузер разложил текст и шрифты.
     setTimeout(function () { centerMotion(); fitPlate(); }, 320);
     S.motionTimer = setTimeout(function () {
-      var out = [{ opacity: 1 }, { opacity: 0 }];
-      anim(root, out, { duration: reduce ? 260 : 420, easing: 'ease-in', fill: 'both' });
+      var outEnd = 0;
+      if (reduce) {
+        anim(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 260, fill: 'both' });
+        outEnd = 280;
+      } else {
+        // Уход — появление наоборот: последние вышедшие уходят первыми, те же движения в обратную сторону.
+        L.slice().reverse().forEach(function (x, i) {
+          var d = Math.round(x[3] * 0.55);
+          anim(x[1], motionFrames(kind, x[0], x[1], o), { duration: d, delay: i * 70, direction: 'reverse', easing: ease, fill: 'both' });
+          outEnd = Math.max(outEnd, i * 70 + d);
+        });
+        if (line && !line.hidden) {
+          line.style.transformOrigin = h === 'r' ? '0 50%' : h === 'c' ? '50% 50%' : '100% 50%';
+          anim(line, [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 380, delay: 200, easing: 'cubic-bezier(.7,0,.84,0)', fill: 'both' });
+          outEnd = Math.max(outEnd, 580);
+        }
+        if (pl && scene === 'plate') {
+          anim(pl, [{ clipPath: o.hid }, { clipPath: F0 }], { duration: 450, delay: Math.max(300, outEnd - 200), direction: 'reverse', easing: ease, fill: 'both' });
+          outEnd = Math.max(outEnd + 250, 750);
+        }
+      }
       S.motionTimer = setTimeout(function () {
         ov.classList.add('motion-hidden');
         ov.classList.remove('motion-plate-on');
@@ -875,8 +918,53 @@
             if (PREVIEW && S.np) showMotion();
           }, 1000);
         }
-      }, reduce ? 280 : 450);
-    }, hold * 1000);
+      }, outEnd + 60);
+    }, introEnd + hold * 1000);
+  }
+
+  // Вид «фирменной» анимации по стилю — как в образце (массив MP: номер стиля → вид).
+  var BRAND = { card: 'slide', vinyl: 'spin', bigtype: 'curtain', column: 'wipe', typography: 'blur', tilt: 'pop',
+    ribbon: 'slide', vtitle: 'curtain', win95: 'pop', sys7: 'flip', winamp: 'slide', dos: 'type', swiss: 'wipe',
+    hud8: 'pop', synth: 'glitch', paper: 'curtain', polaroid: 'drop', code: 'type', cassette: 'spin', vu: 'flip',
+    neon: 'blur', film: 'slide', citypop: 'curtain', popart: 'drop', blueprint: 'wipe', radar: 'glitch' };
+  // Кривые — как в образце; ступенчатых (steps) нет по слову владельца (14.11).
+  var MEZ = { slide: 'cubic-bezier(.16,1,.3,1)', pop: 'cubic-bezier(.34,1.7,.5,1)', wipe: 'cubic-bezier(.7,0,.2,1)',
+    glitch: 'linear', type: 'cubic-bezier(.16,1,.3,1)', flip: 'cubic-bezier(.2,.9,.3,1.2)', spin: 'cubic-bezier(.2,.9,.2,1)',
+    blur: 'ease-out', drop: 'cubic-bezier(.3,1.7,.5,1)', curtain: 'cubic-bezier(.7,0,.1,1)', rush: 'cubic-bezier(.2,1.35,.4,1)',
+    mask: 'cubic-bezier(.19,1,.22,1)', plate: 'cubic-bezier(.22,1,.36,1)' };
+  // Тайминги общих сценариев: задержки обложка/название/исполнитель/визуализатор и длительность.
+  var MTM = { rush: { d: [0, 100, 200, 333], du: 620 }, mask: { d: [0, 130, 250, 380], du: 820 }, plate: { d: [220, 340, 440, 573], du: 620 } };
+
+  // Ключевые кадры части p-вида для роли r (c обложка, t название, a исполнитель/ник/время, v визуализатор).
+  // Собственный поворот/фильтр элемента (e._b, e._f) дописывается — наклоны и ч/б не теряются.
+  function motionFrames(p, r, e, o) {
+    var b = e._b && e._b !== 'none' ? e._b : '';
+    var T = function (s) { return (s + (b ? ' ' + b : '')).trim() || 'none'; };
+    var end = { opacity: 1, transform: b || 'none', clipPath: 'inset(0 0 0 0)', filter: e._f && e._f !== 'none' ? e._f : 'none' };
+    var j = Math.abs(o.ox) / 6 || 10;
+    var mix = function (x) { var y = {}; for (var k in end) y[k] = end[k]; for (var m in x) y[m] = x[m]; return y; };
+    if (p === 'glitch') return [
+      mix({ opacity: 0, transform: T('translateX(' + (-j) + 'px) skewX(30deg)'), filter: 'hue-rotate(90deg) contrast(2)' }),
+      mix({ transform: T('translateX(' + j + 'px) skewX(-20deg)'), filter: 'hue-rotate(-60deg)', offset: 0.15 }),
+      mix({ opacity: 0.2, transform: T('translateX(-4px)'), offset: 0.3 }),
+      mix({ transform: T('translateX(' + (j / 2) + 'px) skewX(8deg)'), filter: 'hue-rotate(30deg)', offset: 0.5 }),
+      mix({ opacity: 0.6, offset: 0.65 }), end];
+    var f = {
+      slide: function () { return { opacity: 0, transform: T('translate(' + (o.ox * (r === 'c' ? 1.2 : 1)) + 'px,' + o.oy + 'px)' + (r === 'c' ? ' rotate(' + (o.ox >= 0 ? 12 : -12) + 'deg)' : '')) }; },
+      pop: function () { return { opacity: 0, transform: T(r === 'v' ? 'scaleY(0)' : r === 'c' ? 'scale(.1) rotate(-20deg)' : 'scale(.5)') }; },
+      wipe: function () { return { clipPath: o.hid, transform: T('translate(' + (o.ox / 4) + 'px,' + (o.oy / 4) + 'px)') }; },
+      type: function () { return r === 't' || r === 'a' ? { clipPath: 'inset(0 100% 0 0)' } : r === 'v' ? { transform: T('scaleX(0)') } : { opacity: 0 }; },
+      flip: function () { return { opacity: 0, transform: T(r === 'c' ? 'perspective(500px) rotateY(90deg)' : r === 'v' ? 'scaleY(0)' : 'perspective(500px) rotateX(-90deg)') }; },
+      spin: function () { return { opacity: 0, transform: T(r === 'c' ? 'rotate(-540deg) scale(0)' : r === 'v' ? 'scaleY(0)' : 'translate(' + (o.ox / 2) + 'px,' + (o.oy / 2) + 'px)') }; },
+      blur: function () { return { opacity: 0, filter: 'blur(14px)', transform: T('scale(1.3)') }; },
+      drop: function () { return { opacity: 0, transform: T('translateY(' + (o.oy * 3) + 'px) rotate(' + (r === 'c' ? -25 : 8) + 'deg)') }; },
+      curtain: function () { return { clipPath: r === 'c' ? 'inset(50% 0 50% 0)' : 'inset(0 50% 0 50%)' }; },
+      rush: function () { return r === 'c' ? { opacity: 0, transform: T('translate(' + (o.ox * 1.5) + 'px,' + o.oy + 'px) rotate(' + (o.ox >= 0 ? -14 : 14) + 'deg) scale(.6)') }
+        : r === 'v' ? { opacity: 0, transform: T('scaleY(0)') } : { opacity: 0, transform: T('translate(' + (o.ox * 1.8) + 'px,' + (o.oy / 2) + 'px) skewX(' + (o.ox >= 0 ? -14 : 14) + 'deg)') }; },
+      mask: function () { return r === 'c' ? { clipPath: 'inset(50% 50% 50% 50%)', transform: T('scale(1.4)') } : r === 'v' ? { opacity: 0, transform: T('scaleY(0)') } : { clipPath: 'inset(0 0 100% 0)', transform: T('translateY(26px)') }; },
+      plate: function () { return { opacity: 0, transform: T('translate(' + (o.ox * 0.35) + 'px,' + (o.oy * 0.6) + 'px)') }; }
+    }[p] || function () { return { opacity: 0 }; };
+    return [mix(f()), end];
   }
 
   function noteTrack(np) {

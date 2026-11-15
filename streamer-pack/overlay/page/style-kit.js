@@ -107,6 +107,12 @@
       var z = K.h('div', 'vz vz-nd');
       z.dataset.viz = 'nd';
       z.dataset.m = String(i);
+      // Шкала как в образце (15.11): белая дуга и красный отрезок дуги на ней — не заливка сектором,
+      // которая вылезала за циферблат. viewBox 64×40, центр дуги — (32, 38), радиус 26.
+      var dial = K.svg('svg', { viewBox: '0 0 64 40', class: 'vu-dial', 'aria-hidden': 'true' });
+      dial.appendChild(K.svg('path', { d: 'M6 38A26 26 0 0 1 58 38', fill: 'none', class: 'vu-arc' }));
+      dial.appendChild(K.svg('path', { d: 'M48.4 17.8A26 26 0 0 1 58 38', fill: 'none', class: 'vu-red' }));
+      z.appendChild(dial);
       z.appendChild(K.h('div', 'needle'));
       box.appendChild(z);
     }
