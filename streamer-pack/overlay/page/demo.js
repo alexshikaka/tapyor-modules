@@ -78,24 +78,36 @@
     };
   }
 
+  // Обложки демо: страница может положить карту «название → адрес картинки» в TapDemoCovers
+  // (так делает сайт Тапёра). Сам пак обложек не везёт — без карты обложки пустые, как раньше.
+  function coverFor(title) {
+    var m = typeof globalThis !== 'undefined' ? globalThis.TapDemoCovers : null;
+    return m && typeof m[title] === 'string' ? m[title] : '';
+  }
+  function withCover(x) {
+    var o = Object.assign({}, x), c = coverFor(o.title);
+    if (c) o.cover = c;
+    return o;
+  }
+
   function np(kind, at, paused, now) {
     var base = TRACKS[kind] || TRACKS.normal;
     var dur = 243;
     var elapsed = Math.max(0, ((Number(now) || Date.now()) - (Number(at) || Date.now())) / 1000);
     var pos = paused ? 92 : (92 + elapsed) % dur;
     return {
-      title: base.title, artist: base.artist, who: base.who, cover: '',
+      title: base.title, artist: base.artist, who: base.who, cover: coverFor(base.title),
       pos: pos, dur: dur, playing: !paused, at: Number(now) || Date.now()
     };
   }
 
-  function list(kind) { return (ORDER[kind] || ORDER.normal).map(function (k) { return Object.assign({}, TRACKS[k]); }); }
+  function list(kind) { return (ORDER[kind] || ORDER.normal).map(function (k) { return withCover(TRACKS[k]); }); }
   function queue(kind) {
     var src = kind === 'long' ? LONG_QUEUE : QUEUE;
-    return src.map(function (x) { return Object.assign({}, x); });
+    return src.map(withCover);
   }
 
-  var api = { TRACKS: TRACKS, options: options, parseFeat: parseFeat, np: np, list: list, queue: queue };
+  var api = { TRACKS: TRACKS, coverFor: coverFor, options: options, parseFeat: parseFeat, np: np, list: list, queue: queue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TapDemo = api;
 })(typeof window !== 'undefined' ? window : this);

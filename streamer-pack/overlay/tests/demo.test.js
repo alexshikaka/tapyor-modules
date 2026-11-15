@@ -33,3 +33,15 @@ test('demo: ?queue=long — длинная очередь для проверк�
   assert.equal(Demo.queue().length, 5, 'обычная очередь не изменилась');
   assert.equal(Demo.options('?queue=long').queue, 'long');
 });
+
+test('demo: обложки из TapDemoCovers — только если страница их дала', () => {
+  assert.equal(Demo.np('normal', 0, true, 0).cover, '');
+  assert.equal('cover' in Demo.queue()[0], false);
+  globalThis.TapDemoCovers = { 'Группа крови': 'covers/a.jpg', 'Хочешь?': 'covers/b.jpg' };
+  try {
+    assert.equal(Demo.np('normal', 0, true, 0).cover, 'covers/a.jpg');
+    assert.equal(Demo.queue()[0].cover, 'covers/b.jpg');
+    assert.equal('cover' in Demo.queue()[1], false);
+    assert.equal(Demo.list('normal')[0].cover, 'covers/a.jpg');
+  } finally { delete globalThis.TapDemoCovers; }
+});
