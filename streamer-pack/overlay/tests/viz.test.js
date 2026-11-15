@@ -123,3 +123,20 @@ test('OV6 лента: история громкости, спектр — пол
   const slow = V.ribbonStep([0, 0, 0], 'spectrum', { n: 3, spec: [0, 0.5, 1], live: true, rate: 0.25 });
   assert.ok(slow[2] > 0 && slow[2] < 0.5);
 });
+
+test('кривая: две линии как в образце — несколько волн на ширину, края гаснут, спектр меняет вторую (15.11)', () => {
+  const V = require('../page/viz.js');
+  const w = V.waveLines('wave', { pts: 60, t: 1, lv: 1 });
+  assert.equal(w.a.length, 61); assert.equal(w.b.length, 61);
+  assert.ok(Math.abs(w.a[0] - 0.5) < 1e-9 && Math.abs(w.b[60] - 0.5) < 1e-9);   // на краях — середина
+  let cross = 0;                                                                  // простая линия: ≥ 4 пересечений середины
+  for (let i = 1; i <= 60; i++) if ((w.a[i] - 0.5) * (w.a[i - 1] - 0.5) < 0) cross++;
+  assert.ok(cross >= 4, 'пересечений ' + cross);
+  const quiet = V.waveLines('wave', { pts: 60, t: 1, lv: 0 });                   // тише — амплитуда меньше
+  assert.ok(Math.abs(quiet.a[20] - 0.5) < Math.abs(w.a[20] - 0.5));
+  const spec = new Array(32).fill(0); spec[0] = 1;                                // только низы
+  const s = V.waveLines('spectrum', { pts: 60, t: 1, lv: 1, spec, live: true });
+  assert.ok(Math.abs(s.b[50] - 0.5) < 0.05);                                      // верха молчат
+  const f = V.waveLines('wave', { pts: 60, t: 1, lv: 1, fill: true });
+  assert.ok(f.a.every((y) => y <= 0.98 + 1e-9) && f.b.every((y) => y <= 0.95 + 1e-9));
+});

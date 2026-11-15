@@ -13,7 +13,7 @@
       var txt = K.h('div', 'textcol');
       txt.append(K.text('title', 'title'), K.text('artist', 'artist'), K.text('time', 'time'), K.text('who', 'who'));
       row.append(bframe, txt); root.append(row);
-      root.append(K.viz('w', 0, { h: 26, cls: 'bp-wave' }), K.queue());
+      root.append(K.viz('w', 0, { h: 26, cls: 'bp-wave', w2: '--a2' }), K.queue());
     }
   });
 })();

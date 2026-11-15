@@ -681,22 +681,38 @@
     var g = c.getContext('2d'); if (!g) return;
     var W = c.width, H = c.height;
     g.clearRect(0, 0, W, H);
-    var pts = 60;
-    var vals = V.values('w', view, {
-      n: pts + 1, lv: paused ? 0 : levelNow(now), spec: S.spec, live: live, phase: now / 1000
+    var pts = 60, fill = z.dataset.fill === '1';
+    var L = V.waveLines(view, {
+      pts: pts, t: now / 1000, lv: paused ? 0 : levelNow(now), spec: S.spec, live: live, fill: fill
     });
-    g.beginPath();
+    // Плавность: каждая точка подтягивается к цели (на паузе линии плавно выпрямляются).
+    var rest = fill ? 0.97 : 0.5;
+    if (!st.a) { st.a = L.a.slice(); st.b = L.b.slice(); }
     for (var i = 0; i <= pts; i++) {
-      st.shown[i] = V.next(st.shown[i] || 0, vals[i] || 0, alpha);
-      var y = V.waveY(st.shown[i], i, pts, H);
-      var x = i * W / pts;
-      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      st.a[i] = V.next(st.a[i], paused ? rest : L.a[i], alpha);
+      st.b[i] = V.next(st.b[i], paused ? rest : L.b[i], alpha);
     }
     var cs = getComputedStyle(z);
-    g.strokeStyle = cs.getPropertyValue('--v').trim() || '#fff';
-    g.lineWidth = Math.max(2, H / 12);
-    g.lineJoin = 'round';
-    g.stroke();
+    var c1 = cs.getPropertyValue('--v').trim() || '#fff';
+    var c2 = cs.getPropertyValue(z.dataset.w2 || '--c').trim() || '#fff';
+    var line = function (arr, color, width, fillAlpha) {
+      g.beginPath();
+      for (var j = 0; j <= pts; j++) {
+        var x = j * W / pts, y = arr[j] * H;
+        if (j === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      if (fillAlpha) {
+        g.lineTo(W, H); g.lineTo(0, H); g.closePath();
+        g.globalAlpha = fillAlpha; g.fillStyle = c1; g.fill(); g.globalAlpha = 1;
+        g.beginPath();
+        for (var k = 0; k <= pts; k++) { var xx = k * W / pts; if (k === 0) g.moveTo(xx, arr[k] * H); else g.lineTo(xx, arr[k] * H); }
+      }
+      g.strokeStyle = color; g.lineWidth = width; g.lineJoin = 'round'; g.lineCap = 'round';
+      g.stroke();
+    };
+    // Как в образце: сначала простая линия вторым цветом, поверх — сложная цветом визуализатора.
+    line(st.a, c2, 3, fill ? 0.6 : 0);
+    line(st.b, c1, 4, fill ? 0.8 : 0);
   }
 
   function rafLoop() {
@@ -985,6 +1001,18 @@
     requestAnimationFrame(rafLoop);
     window.addEventListener('resize', function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
+    // Шрифты лежат в паке, но браузер грузит их только по первому требованию: при быстром переключении стиля
+    // раскладка считалась по запасному шрифту. Поэтому (15.11): 1) сразу подгружаем все объявленные шрифты
+    // (пак + ядро, ~1 МБ с диска); 2) после каждой догрузки шрифта пересчитываем раскладку.
+    if (document.fonts) {
+      try { document.fonts.forEach(function (f) { f.load().catch(function () {}); }); } catch (e) { /* старый браузер */ }
+      var refitT = 0;
+      var refit = function () {
+        clearTimeout(refitT);
+        refitT = setTimeout(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } }, 30);
+      };
+      if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', refit);
+    }
     // Только для проверок (?demo=1): меняет сдвиг/размер без перезагрузки страницы.
     // В OBS demo нет, поэтому хук не появляется.
     if (DEMO) {

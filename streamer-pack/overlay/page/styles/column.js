@@ -10,7 +10,7 @@
       root.classList.add('column');
       var cov = K.cover('column-cover');
       root.append(cov, K.text('title', 'title'), K.text('artist', 'artist'), K.text('who', 'who'));
-      root.append(K.viz('w', 0, { h: 26, cls: 'column-wave' }), K.queue());
+      root.append(K.viz('w', 0, { h: 26, cls: 'column-wave', w2: '--a2' }), K.queue());
     }
   });
 })();

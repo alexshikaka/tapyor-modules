@@ -68,6 +68,9 @@
     if (opts.h) z.dataset.h = String(opts.h);
     if (opts.m) z.dataset.m = String(opts.m);
     if (kind === 'w') {
+      // Две линии, как в образце: вторая — цветом из переменной w2 (по умолчанию цвет текста); fill — с заливкой.
+      z.dataset.w2 = opts.w2 || '--c';
+      if (opts.fill) z.dataset.fill = '1';
       var c = K.h('canvas', 'viz-canvas');
       c.width = 600;
       c.height = opts.h || 30;

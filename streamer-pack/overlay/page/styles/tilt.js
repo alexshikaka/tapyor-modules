@@ -11,7 +11,7 @@
       var row = K.h('div', 'row'), cov = K.cover('tilt-cover'), txt = K.h('div', 'textcol');
       txt.append(K.text('title', 'title'), K.text('artist', 'artist'), K.text('who', 'who'));
       row.append(cov, txt); root.append(row);
-      root.append(K.viz('w', 0, { h: 30, cls: 'tilt-wave' }), K.queue());
+      root.append(K.viz('w', 0, { h: 30, cls: 'tilt-wave', w2: '--c', fill: true }), K.queue());
     }
   });
 })();

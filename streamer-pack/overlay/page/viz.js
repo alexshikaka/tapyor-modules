@@ -149,7 +149,37 @@
     return h;
   }
 
-  var api = { clamp: clamp, interp: interp, next: next, lit: lit, needleAngle: needleAngle, waveY: waveY,
+  // Кривая (w) — две линии, как в образце владельца (15.11): точки 0…pts, y — доля высоты (0 — верх, 1 — низ).
+  // a — простая синусоида (~3 волны на ширину), b — сложная с биением (~4 волны); к краям обе гаснут (en).
+  // fill — вариант «Наклонённой обложки»: линии от низа вверх, под ними заливка.
+  // Волна: обе дышат под громкость. Спектр: b — амплитуда по частотам вдоль ширины, a — громкость.
+  // t — секунды; скорость как в образце (Date.now()/300).
+  function waveLines(view, o) {
+    o = o || {};
+    var pts = Math.max(2, Math.round(Number(o.pts) || 60));
+    var t = (Number(o.t) || 0) * 1000 / 300;
+    var lv = clamp(Number(o.lv) || 0, 0, 1);
+    var amp = 0.25 + 0.75 * lv;
+    var spectrum = viewOf(view) === 'spectrum' && liveSpec(o);
+    var fill = !!o.fill;
+    var a = new Array(pts + 1), b = new Array(pts + 1);
+    for (var i = 0; i <= pts; i++) {
+      var en = Math.sin(i / pts * Math.PI);
+      var s = spectrum ? interp(o.spec, i, pts + 1) : 0;
+      if (fill) {
+        a[i] = 0.98 - 0.55 * en * amp * Math.abs(Math.sin(t * 1.2 + i * 0.2 + 2));
+        b[i] = spectrum ? 0.95 - 0.85 * en * s
+          : 0.95 - 0.85 * en * amp * Math.abs(Math.sin(t + i * 0.5) * Math.cos(t * 0.7 + i * 0.21));
+      } else {
+        a[i] = 0.5 - 0.3 * en * amp * Math.sin(t * 1.3 + i * 0.3 + 1.5);
+        b[i] = spectrum ? 0.5 - 0.45 * en * s * Math.sin(t + i * 0.45)
+          : 0.5 - 0.42 * en * amp * Math.sin(t + i * 0.45) * Math.cos(t * 0.5 + i * 0.12);
+      }
+    }
+    return { a: a, b: b };
+  }
+
+  var api = { waveLines: waveLines, clamp: clamp, interp: interp, next: next, lit: lit, needleAngle: needleAngle, waveY: waveY,
     historyPush: historyPush, imitation: imitation,
     viewOf: viewOf, waveShape: waveShape, bandAvg: bandAvg, smoothSeries: smoothSeries,
     needleValues: needleValues, values: values, ribbonStep: ribbonStep };
