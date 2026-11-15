@@ -19,3 +19,14 @@
 [data-style="code"] .queue{padding-left:32px;font-size:15px;color:var(--a6)}
 [data-style="code"] .queue>div::before{content:'"';color:var(--a6)}
 [data-style="code"] .queue>div::after{content:'",';color:var(--a6)}
+/* 15.11: строка кода — «ключ: "значение",» в одну строку, как в образце; значение не переносится, длинное режется. */
+[data-style="code"] .code-indent{display:flex;align-items:baseline;white-space:nowrap;min-width:0}
+[data-style="code"] .code-indent>.code-value,[data-style="code"] .code-indent>.code-who{min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+[data-style="code"] .code-value::before,[data-style="code"] .code-value::after,
+[data-style="code"] .code-who::before,[data-style="code"] .code-who::after{content:'"'}
+[data-style="code"] .code-indent:not(.code-vu):not([data-pl])::after{content:',';color:var(--c)}
+/* Выключенный элемент (ник, время) убирает всю свою строку, а не только значение. */
+[data-style="code"] .code-indent:has(>[hidden]){display:none}
+/* Пробел после «:» не схлопывается во флекс-строке; у названия — бегущая строка вместо многоточия. */
+[data-style="code"] .code-p{white-space:pre}
+[data-style="code"] .code-indent>.code-title{text-overflow:clip}

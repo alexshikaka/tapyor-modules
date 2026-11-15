@@ -237,7 +237,7 @@ const measured = await page.addInitScript(() => {
         box(root.querySelector('[data-role="prog"]')), ...viz.map(box)]
     });
     return {
-      visible, labels, views, queueRows: rows.length, firstText: rows[0] ? rows[0].textContent : '',
+      visible, labels, views, queueRows: rows.length, firstText: rows[0] ? (function (r) { var b = getComputedStyle(r, '::before').content; b = b && b !== 'none' && b !== 'normal' ? b.replace(/^"|"$/g, '') : ''; return b + r.textContent; })(rows[0]) : '',
       secondOpacity, sig,
       titleInfo: title ? {
         cls: title.className, cw: title.clientWidth, sw: title.scrollWidth,
@@ -644,7 +644,10 @@ if (featuresMode) {
         continue;
       }
       if (key === 'nums') {
-        if (/^1\.\s/.test(off.r.firstText) || !/^1\.\s/.test(on.r.firstText)) fail('номера не переключаются', { off: off.r.firstText, on: on.r.firstText });
+        // Номер — общий «1. » или свой у стиля «[1] » (Чертёж); двойной («[1] 1. ») — ошибка (15.11).
+        const num = /^(1\.|\[1\])\s/;
+        if (num.test(off.r.firstText) || !num.test(on.r.firstText)) fail('номера не переключаются', { off: off.r.firstText, on: on.r.firstText });
+        else if (/^\[1\]\s+1\./.test(on.r.firstText)) fail('двойная нумерация', { on: on.r.firstText });
         continue;
       }
       if (!off.r.visible[key] && on.r.visible[key]) continue;

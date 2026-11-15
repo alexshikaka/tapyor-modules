@@ -54,7 +54,7 @@ const STYLE_DEFS = Object.freeze([
   { id: 'polaroid', num: 17, name: 'Полароид', font: 'Caveat', have: false, color: '#FFFFFF', vizColor: '#FFD6A5',
     features: BASE, vizKind: 'spectrum' },
   { id: 'code', num: 18, name: 'Код (JSON)', font: 'JetBrains Mono', have: false, color: '#E6EDF3', vizColor: '#7EE787',
-    features: WITH_TIME, vizKind: 'spectrum' },
+    features: WITH_TIME.filter((k) => k !== 'nums'), vizKind: 'spectrum' }, // у кода номеров нет (как в образце)
   { id: 'cassette', num: 19, name: 'Кассета', font: 'PT Mono', have: false, color: '#FFFFFF', vizColor: '#E8D9B5',
     // У кассеты вместо обложки — сама кассета, поэтому переключателя обложки у неё нет.
     features: ['osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },

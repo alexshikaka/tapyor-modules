@@ -228,7 +228,8 @@
       title.textContent = np.title || '';
       if (artist) { artist.textContent = np.artist || ''; artist.hidden = false; }
       if (who) {
-        var nk = cfg.nick && np.who ? 'заказ: ' + np.who : '';
+        // У «Кода» строка — `who: "ник",` (подпись даёт ключ), у остальных — «заказ: ник».
+        var nk = cfg.nick && np.who ? (cfg.style === 'code' ? np.who : 'заказ: ' + np.who) : '';
         who.textContent = nk;
         who.hidden = !nk;
       }
@@ -243,7 +244,11 @@
   function renderQueue(cfg) {
     var q = S.roles.queue; if (!q) return;
     var cnt = hasFeature(cfg.style, 'count') ? cfg.count : (S.next || []).length;
-    var numsOn = hasFeature(cfg.style, 'nums') ? cfg.nums : true;
+    // Номера строк: только у стилей с ключом nums и только по тумблеру (у «Кода» их нет совсем).
+    // У «Чертежа» номер свой — «[n]» оформлением стиля, поэтому общий «n. » не добавляем (15.11: была двойная нумерация).
+    var numsOn = hasFeature(cfg.style, 'nums') ? !!cfg.nums : false;
+    var ownNums = cfg.style === 'blueprint';
+    q.classList.toggle('no-nums', !numsOn);
     var fadeOn = hasFeature(cfg.style, 'fade') ? cfg.fade !== false : true;
     var list = (S.next || []).slice(0, cnt);
     var sig = JSON.stringify(list) + '|' + numsOn + '|' + fadeOn + '|' + cfg.fadePct + '|' + cfg.nick;
@@ -255,7 +260,7 @@
       if (cfg.style === 'winamp') {
         d.textContent = T.winampQueueRow(it, i, numsOn);
       } else {
-        var pref = numsOn ? (i + 1) + '. ' : '';
+        var pref = numsOn && !ownNums ? (i + 1) + '. ' : '';
         d.textContent = pref + it.title + (it.artist ? ' - ' + it.artist : '');
       }
       if (cfg.nick && it.who) {

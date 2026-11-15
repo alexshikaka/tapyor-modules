@@ -29,7 +29,7 @@
     synth: { features: BASE.slice(), vizKind: 'spectrum' },
     paper: { features: BASE.slice(), vizKind: 'spectrum' },
     polaroid: { features: BASE.slice(), vizKind: 'spectrum' },
-    code: { features: WITH_TIME.slice(), vizKind: 'spectrum' },
+    code: { features: WITH_TIME.filter(function (k) { return k !== 'nums'; }), vizKind: 'spectrum' }, // у кода номеров нет (как в образце)
     cassette: { features: ['osc', 'viz', 'marq'].concat(Q), vizKind: 'spectrum' },
     vu: { features: BASE.slice(), vizKind: 'level' },
     neon: { features: BASE.slice(), vizKind: 'spectrum' },

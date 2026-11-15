@@ -32,7 +32,7 @@ const EXPECTED = {
   synth: { features: BASE, vizKind: 'spectrum' },
   paper: { features: BASE, vizKind: 'spectrum' },
   polaroid: { features: BASE, vizKind: 'spectrum' },
-  code: { features: WITH_TIME, vizKind: 'spectrum' },
+  code: { features: WITH_TIME.filter((k) => k !== 'nums'), vizKind: 'spectrum' }, // 15.11: у кода номеров нет
   cassette: { features: ['osc', 'viz', 'marq', ...Q], vizKind: 'spectrum' },
   vu: { features: BASE, vizKind: 'level' },
   neon: { features: BASE, vizKind: 'spectrum' },
@@ -66,7 +66,9 @@ test('OV3: в features только ключи договора, без повт
 
 test('OV3: очередь есть у всех стилей плейлиста, а у моушна её ключей нет', () => {
   assert.deepEqual([...QUEUE_FEATURES], Q);
-  for (const s of STYLE_DEFS) for (const k of Q) assert.ok(s.features.includes(k), s.id + ': нет ' + k);
+  // 15.11: у «Кода» номеров строк нет (как в образце) — остальные ключи очереди у всех
+  for (const s of STYLE_DEFS) for (const k of Q) { if (s.id === 'code' && k === 'nums') continue; assert.ok(s.features.includes(k), s.id + ': нет ' + k); }
+  assert.equal(STYLE_DEFS.find((s) => s.id === 'code').features.includes('nums'), false);
   for (const k of Q) assert.equal(MOTION_FEATURE_KEYS.includes(k), false, 'моушн не должен знать ' + k);
   assert.deepEqual([...MOTION_FEATURE_KEYS], ['cover', 'time', 'spin', 'prog', 'osc', 'marq', 'lang', 'viz', 'smooth']);
 });
