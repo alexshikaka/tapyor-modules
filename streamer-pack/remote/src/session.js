@@ -13,6 +13,7 @@ const ENDED = 'Сессия закончилась — подключи теле
 const NETWORK = 'нет связи с облаком пульта';
 
 const WANT_WINDOW = 60 * 1000;          // телефон был меньше минуты назад — собираем снимок и ленту
+const PHONE_MISSING = 60 * 1000;        // столько ждём телефон после показа QR (подсказка «не подключился»)
 const PHONE_FAST = 30 * 1000;           // телефон на связи — опрос раз в секунду
 const PHONE_SLOW = 2 * 60 * 60 * 1000;  // телефона нет два часа — опрос раз в 30 секунд
 const MSG_OLD = 120 * 1000;             // команда старше двух минут — не выполняем
@@ -152,6 +153,7 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.shownAt = null;      // когда показали QR: через минуту без телефона — подсказка phone-missing
 
     this.ack = 0;
     this.seen = [];
@@ -197,12 +199,14 @@ class RemoteSession {
 
   status() {
     const ago = this.phoneAt == null ? null : Math.max(0, Math.round(this.now() - this.phoneAt));
+    const waiting = this.shownAt == null ? null : Math.max(0, Math.round(this.now() - this.shownAt));
     return {
       state: this.state,
       phoneAgo: ago,
       url: this.url || '',
       qrSvg: this.qrSvg || '',
-      error: this.error || null
+      error: this.error || null,
+      hint: this.phoneAt == null && waiting != null && waiting >= PHONE_MISSING ? 'phone-missing' : null
     };
   }
 
@@ -253,6 +257,7 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.shownAt = null;
     this.ack = 0;
     this.seen = [];
     this.seenSet = new Set();
@@ -318,6 +323,7 @@ class RemoteSession {
       }
     }
     this.setState('waiting', null);
+    this.shownAt = this.now();
     await this.pollOnce();
     return this.status();
   }
@@ -508,6 +514,7 @@ module.exports = {
   ENDED,
   NETWORK,
   WANT_WINDOW,
+  PHONE_MISSING,
   RETRY_MIN,
   RETRY_MAX
 };
