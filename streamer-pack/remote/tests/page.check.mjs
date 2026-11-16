@@ -120,7 +120,31 @@ function contentType(name) {
   if (name.endsWith('.html')) return 'text/html; charset=utf-8';
   if (name.endsWith('.css')) return 'text/css; charset=utf-8';
   if (name.endsWith('.js')) return 'text/javascript; charset=utf-8';
+  if (name.endsWith('.webmanifest')) return 'application/manifest+json';
+  if (name.endsWith('.png')) return 'image/png';
   return 'application/octet-stream';
+}
+
+function extraInit() {
+  window.REMOTE_CONFIG = { relays: ['https://one.test', 'https://relay.test'], url: 'https://one.test' };
+  window.fetch = async function (url, opts) {
+    const r = await window.__remoteRelay(String(url), opts ? { method: opts.method, body: opts.body } : {});
+    return new Response(JSON.stringify(r.body), { status: r.status || 200, headers: { 'Content-Type': 'application/json' } });
+  };
+}
+
+// Отдельная вкладка «телефона» со своим localStorage и подменённым ответом функции.
+async function openExtra(browser, relay, options = {}) {
+  const contextOptions = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true };
+  if (options.userAgent) contextOptions.userAgent = options.userAgent;
+  const context = await browser.newContext(contextOptions);
+  if (options.before) await context.addInitScript(options.before, options.beforeArg);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e && e.message ? e.message : e)));
+  await page.exposeFunction('__remoteRelay', relay);
+  await page.addInitScript(extraInit);
+  return { context, page, errors };
 }
 
 async function main() {
@@ -213,6 +237,13 @@ async function main() {
     assert.equal(await page.locator('#panelFeed').isVisible(), false, 'вертикально — одна вкладка');
     assert.equal(await page.locator('#panelDock').isVisible(), true);
 
+    // Кнопка «На весь экран»: Chromium в тесте даёт API. На iPhone и без API её нет (ниже).
+    assert.equal(await page.locator('#fsBtn').isVisible(), true, 'кнопка «На весь экран» есть при поддержке API');
+    assert.equal(await page.locator('#iosHint').isVisible(), false, 'на обычном браузере подсказки iPhone нет');
+    assert.equal(await page.locator('link[rel="manifest"]').getAttribute('href'), 'manifest.webmanifest');
+    assert.equal(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'), 'icon-192.png');
+    assert.equal(await page.locator('meta[name="apple-mobile-web-app-capable"]').getAttribute('content'), 'yes');
+
     // Тексты из снимка — через textContent, без исполнения HTML.
     const title = await page.locator('#dockHost .q .t').first().textContent();
     assert.match(title || '', /Нервы/);
@@ -263,6 +294,91 @@ async function main() {
     console.log('OK: страница пульта — 390×844 и 844×390, облако №1 из config.js, команды remove/rq ушли, script не исполнился');
     console.log('Снимки: ' + path.join(shots, 'remote-portrait.png') + ', ' + path.join(shots, 'remote-landscape.png'));
 
+    // ── полный экран: без API кнопки нет ────────────────────────────
+    const noFs = await openExtra(browser, relay, {
+      before: () => {
+        Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, get: () => false });
+      }
+    });
+    try {
+      await noFs.page.goto(url, { waitUntil: 'domcontentloaded' });
+      assert.equal(await noFs.page.evaluate(() => document.fullscreenEnabled), false, 'API полного экрана выключен');
+      assert.equal(await noFs.page.locator('#fsBtn').isVisible(), false, 'без API кнопки «На весь экран» нет');
+      assert.equal(await noFs.page.locator('#iosHint').isVisible(), false, 'не iPhone — подсказки нет');
+      assert.deepEqual(noFs.errors, [], 'на странице без API нет ошибок');
+    } finally {
+      await noFs.context.close();
+    }
+
+    // ── iPhone: вместо кнопки — одноразовая подсказка ───────────────
+    const iphone = await openExtra(browser, relay, {
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+    });
+    try {
+      await iphone.page.goto(url, { waitUntil: 'domcontentloaded' });
+      assert.equal(await iphone.page.locator('#fsBtn').isVisible(), false, 'на iPhone кнопки полного экрана нет');
+      assert.equal(await iphone.page.locator('#iosHint').isVisible(), true, 'подсказка iPhone видна');
+      const hintText = await iphone.page.locator('#iosHint').innerText();
+      assert.match(hintText, /Поделиться/, 'подсказка про «Поделиться»');
+      assert.match(hintText, /На экран/, 'подсказка про «На экран „Домой“»');
+      assert.equal(await iphone.page.evaluate(() => localStorage.getItem('remoteIosHint')), '1', 'показ запомнен');
+      await iphone.page.locator('#iosHintClose').click();
+      assert.equal(await iphone.page.locator('#iosHint').isVisible(), false, 'крестик закрывает подсказку');
+      await iphone.page.reload({ waitUntil: 'domcontentloaded' });
+      assert.equal(await iphone.page.locator('#iosHint').isVisible(), false, 'подсказка показывается один раз');
+      assert.deepEqual(iphone.errors, [], 'на iPhone-странице нет ошибок');
+    } finally {
+      await iphone.context.close();
+    }
+
+    // ── последняя сессия: без # подхватывается, новый # важнее, 404 стирает ──
+    const baseUrl = 'http://127.0.0.1:' + port + '/remote/';
+    const remember = (value) => {
+      localStorage.setItem('remoteLastSession', JSON.stringify({ sid: value.sid, key: value.key, cloud: 0, mode: 'cloud' }));
+    };
+
+    const restored = await openExtra(browser, relay, { before: remember, beforeArg: { sid: SID, key: C.b64u(KEY) } });
+    try {
+      await restored.page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      const restoredRows = await waitUntil(() => restored.page.locator('#dockHost .q').count().then((n) => n >= 8));
+      assert.ok(restoredRows, 'страница без # подхватывает сохранённую сессию');
+      const kept = JSON.parse(await restored.page.evaluate(() => localStorage.getItem('remoteLastSession')) || '{}');
+      assert.equal(kept.sid, SID, 'в памяти остался тот же sid');
+      assert.deepEqual(restored.errors, [], 'на восстановленной странице нет ошибок');
+    } finally {
+      await restored.context.close();
+    }
+
+    const fresh = await openExtra(browser, relay, {
+      before: remember,
+      beforeArg: { sid: 'Z'.repeat(22), key: 'Y'.repeat(43) }
+    });
+    try {
+      await fresh.page.goto(url, { waitUntil: 'domcontentloaded' });
+      const freshRows = await waitUntil(() => fresh.page.locator('#dockHost .q').count().then((n) => n >= 8));
+      assert.ok(freshRows, 'новый # в адресе важнее сохранённого');
+      const replaced = JSON.parse(await fresh.page.evaluate(() => localStorage.getItem('remoteLastSession')) || '{}');
+      assert.equal(replaced.sid, SID, 'сохранён новый адрес');
+      assert.equal(replaced.key, C.b64u(KEY));
+    } finally {
+      await fresh.context.close();
+    }
+
+    const goneRelay = async () => ({ status: 404, body: { error: 'no-session' } });
+    const gone = await openExtra(browser, goneRelay, { before: remember, beforeArg: { sid: SID, key: C.b64u(KEY) } });
+    try {
+      await gone.page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      const told = await waitUntil(() => gone.page.evaluate(() => {
+        const b = document.getElementById('banner');
+        return !!b && !b.hidden && /Отсканируй новый QR-код в Тапёре/.test(b.textContent || '');
+      }));
+      assert.ok(told, '404 — экран «Отсканируй новый QR-код в Тапёре»');
+      assert.equal(await gone.page.evaluate(() => localStorage.getItem('remoteLastSession')), null, '404 стирает сохранённую сессию');
+    } finally {
+      await gone.context.close();
+    }
+    console.log('OK: полный экран — кнопка есть/нет; iPhone — подсказка один раз; последняя сессия — без #, новый #, 404');
+
     // Режим Wi-Fi: настоящий http://127.0.0.1, страница без crypto.subtle — AES-GCM на чистом JS.
     const lanCore = fakeCore();
     const lan = createLanServer({ address: '127.0.0.1', port: 0, pageDir: PAGE_DIR });
@@ -271,6 +387,32 @@ async function main() {
     let lanSession = null;
     try {
       assert.equal(lanInfo.selfOk, true, 'сервер Wi-Fi отвечает сам себе по /ping');
+
+      // Манифест и значки на домашний экран отдаются с правильными типами.
+      const man = await fetch(lanInfo.base + '/manifest.webmanifest');
+      assert.equal(man.status, 200, 'manifest.webmanifest отдаётся');
+      assert.equal(man.headers.get('content-type'), 'application/manifest+json', 'тип манифеста');
+      const manJson = await man.json();
+      assert.equal(manJson.name, 'Пульт Тапёра');
+      assert.equal(manJson.short_name, 'Тапёр');
+      assert.equal(manJson.display, 'standalone');
+      assert.equal(manJson.start_url, './');
+      assert.equal(manJson.background_color, '#222222');
+      assert.equal(manJson.theme_color, '#222222');
+      assert.deepEqual(manJson.icons.map((i) => i.sizes), ['192x192', '512x512']);
+      for (const [name, type] of [['icon-192.png', 'image/png'], ['icon-512.png', 'image/png']]) {
+        const icon = await fetch(lanInfo.base + '/' + name);
+        assert.equal(icon.status, 200, name);
+        assert.equal(icon.headers.get('content-type'), type, name + ': тип');
+        assert.ok((await icon.arrayBuffer()).byteLength > 100, name + ': файл не пустой');
+      }
+      const lanHtml = await fetch(lanInfo.base + '/').then((r) => r.text());
+      assert.match(lanHtml, /rel="manifest" href="manifest\.webmanifest"/, 'страница подключает манифест');
+      assert.match(lanHtml, /rel="apple-touch-icon" href="icon-192\.png"/, 'страница подключает значок iPhone');
+      assert.match(lanHtml, /name="apple-mobile-web-app-capable" content="yes"/, 'страница открывается без адресной строки');
+      assert.match(lanHtml, /phone-extras\.js/, 'страница подключает дополнения телефона');
+      assert.equal((await fetch(lanInfo.base + '/phone-extras.js')).status, 200, 'phone-extras.js в белом списке');
+
       lanSession = new RemoteSession(lanCore, {
         relay: lan.channel(),
         page: lanInfo.base + '/',

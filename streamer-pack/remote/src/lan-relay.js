@@ -37,7 +37,11 @@ const PAGE_FILES = {
   '/crypto.js': ['crypto.js', 'text/javascript; charset=utf-8'],
   '/aes-gcm.js': ['aes-gcm.js', 'text/javascript; charset=utf-8'],
   '/render-dock.js': ['render-dock.js', 'text/javascript; charset=utf-8'],
-  '/poll-plan.js': ['poll-plan.js', 'text/javascript; charset=utf-8']
+  '/poll-plan.js': ['poll-plan.js', 'text/javascript; charset=utf-8'],
+  '/phone-extras.js': ['phone-extras.js', 'text/javascript; charset=utf-8'],
+  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
+  '/icon-192.png': ['icon-192.png', 'image/png'],
+  '/icon-512.png': ['icon-512.png', 'image/png']
 };
 
 const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);

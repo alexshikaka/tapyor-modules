@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:">
   <meta name="theme-color" content="#222222">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Пульт Тапёра</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" href="remote.css">
 </head>
@@ -16,6 +19,9 @@
         <span class="dot" id="dot" aria-hidden="true"></span>
         <span class="logo">Тапёр</span>
         <span class="lnk" id="phoneAgo">подключаюсь…</span>
+        <button id="fsBtn" class="fsb" type="button" aria-label="На весь экран" title="На весь экран" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4zM14 4h6v6h-2V6h-4zM4 14h2v4h4v2H4zM18 14h2v6h-6v-2h4z"/></svg>
+        </button>
       </div>
       <label class="sbox">
         <span class="mag" aria-hidden="true">⌕</span>
@@ -26,6 +32,11 @@
         <button id="tabFeed" type="button" role="tab" aria-selected="false">Сообщения<span class="n" id="tabCount">0</span></button>
       </div>
     </header>
+
+    <div id="iosHint" class="ioshint" hidden>
+      <span>Чтобы открыть пульт без адресной строки: «Поделиться» → «На экран „Домой“».</span>
+      <button id="iosHintClose" class="ihx" type="button" aria-label="Закрыть подсказку">×</button>
+    </div>
 
     <div id="banner" class="banner" hidden></div>
     <div id="results" class="res" hidden></div>
@@ -71,6 +82,7 @@
   <script src="crypto.js"></script>
   <script src="render-dock.js"></script>
   <script src="poll-plan.js"></script>
+  <script src="phone-extras.js"></script>
   <script src="remote.js"></script>
 </body>
 </html>
