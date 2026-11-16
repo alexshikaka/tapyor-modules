@@ -81,6 +81,11 @@ function bridgeCommand(o) {
     }
     case 'mode':
       return o.m === 'classic' || o.m === 'live' ? { kind: 'dock', cmd: { c, m: o.m } } : null;
+    case 'waveat': {     // включить трек из «Дальше в волне» (16.11)
+      const j = indexNum(o.j);
+      const key = shortStr(o.key, 300);
+      return j == null || !key ? null : { kind: 'dock', cmd: { c, j, key } };
+    }
     case 'wave':
       return o.a === 'play' || o.a === 'auto' ? { kind: 'dock', cmd: { c, a: o.a } } : null;
     case 'tr':

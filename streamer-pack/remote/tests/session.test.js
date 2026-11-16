@@ -223,6 +223,16 @@ test('SESSION: команда телефона доходит до core.remote.d
   assert.equal(h.fn.sessions.get(h.session.sid).cmds.length, 0, 'принятая команда удалена по ack');
 });
 
+test('SESSION: «Дальше в волне» — waveat с номером и ключом доходит до ядра, без ключа — нет (16.11)', async () => {
+  const h = setup();
+  await withData(h);
+  await sendPhone(h.session, { c: 'waveat', j: 2, key: 'ym:w2' });
+  await sendPhone(h.session, { c: 'waveat', j: 'x', key: 'ym:w3' });
+  await sendPhone(h.session, { c: 'waveat', j: 1 });
+  await h.session.pollOnce();
+  assert.deepEqual(h.core.dockCalls, [{ c: 'waveat', j: 2, key: 'ym:w2' }]);
+});
+
 test('SESSION: повтор n, старое t, будущее t и чужая команда отброшены', async () => {
   const h = setup();
   await withData(h);

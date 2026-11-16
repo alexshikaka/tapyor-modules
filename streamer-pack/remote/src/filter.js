@@ -37,6 +37,7 @@ function cleanItem(item) {
 function cleanAfter(item) {
   if (!plainObject(item)) return null;
   return {
+    key: typeof item.key === 'string' ? item.key.slice(0, 300) : '',   // для «включить трек волны» (waveat)
     title: typeof item.title === 'string' ? item.title : '',
     artist: typeof item.artist === 'string' ? item.artist : '',
     thumb: httpsOnly(item.thumb)

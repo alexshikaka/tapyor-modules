@@ -20,9 +20,19 @@
 
   function isHttps(value) { return typeof value === 'string' && /^https:\/\//i.test(value); }
 
+  // Обложки прошлой отрисовки по адресу: новую строку собираем с ТОЙ ЖЕ картинкой, а не загружаем
+  // заново — иначе при каждом снимке с ПК обложки мигали заглушкой и список «дёргался» (16.11).
+  var IMGS = new Map();
   function cover(item) {
     var idx = item && Number.isFinite(Number(item.i)) ? Math.abs(Number(item.i)) : 0;
     var box = make('span', 'cov ph g' + (idx % 7), '♪');
+    var old = item && isHttps(item.thumb) ? IMGS.get(item.thumb) : null;
+    if (old && old.length) {
+      box.textContent = '';
+      box.classList.remove('ph');
+      box.appendChild(old.shift());
+      return box;
+    }
     if (item && isHttps(item.thumb)) {
       var img = document.createElement('img');
       img.alt = '';
@@ -252,8 +262,7 @@
     function play() {
       if (row.classList.contains('playing')) return;
       var was = list.querySelector('.q.playing'); if (was) was.classList.remove('playing');
-      row.classList.add('playing', 'tap');
-      setTimeout(function () { row.classList.remove('tap'); }, 220);
+      row.classList.add('playing');
       send({ c: 'play', i: item.i, key: item.key });
     }
     cov.addEventListener('click', play);
@@ -274,8 +283,15 @@
     setTimeout(function () { flip(list, function () { if (row.parentNode) row.parentNode.removeChild(row); }); }, 180);
   }
 
-  function afterRow(item) {
+  function afterRow(item, j, list, send) {
     var row = make('div', 'q after');
+    row.setAttribute('role', 'button');
+    row.title = 'Включить';
+    row.addEventListener('click', function () {
+      if (!item || typeof item.key !== 'string') return;
+      gone(row, list);
+      send({ c: 'waveat', j: j, key: item.key });
+    });
     row.appendChild(cover(item));
     var main = make('div', 'm');
     main.appendChild(make('div', 't', item.title || ''));
@@ -292,6 +308,13 @@
     var was = new Map();
     Array.prototype.forEach.call(host.querySelectorAll('.q[data-key]'), function (r) {
       var k = r.getAttribute('data-key'); if (k && !was.has(k)) was.set(k, r.getBoundingClientRect().top);
+    });
+    IMGS = new Map();
+    Array.prototype.forEach.call(host.querySelectorAll('.cov img'), function (im) {
+      var u = im.getAttribute('src');
+      if (!u || !im.complete || !im.naturalWidth) return;
+      if (!IMGS.has(u)) IMGS.set(u, []);
+      IMGS.get(u).push(im);
     });
     host.replaceChildren();
     if (!snap || !Array.isArray(snap.items)) {
@@ -313,7 +336,7 @@
     // «Дальше в волне» — продолжение той же очереди, как в окне (одна прокрутка)
     if (snap.mode === 'live' && Array.isArray(snap.after) && snap.after.length) {
       list.appendChild(make('div', 'qn-h', 'Дальше в волне · ' + snap.after.length));
-      for (var a = 0; a < snap.after.length; a++) list.appendChild(afterRow(snap.after[a]));
+      for (var a = 0; a < snap.after.length; a++) list.appendChild(afterRow(snap.after[a], a, list, send));
     }
     host.appendChild(list);
     sc.scrollTop = keepScroll;

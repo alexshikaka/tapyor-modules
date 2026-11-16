@@ -471,6 +471,20 @@
     return row;
   }
 
+  // Запрос для поиска из карточки: найденный трек (как его подобрал Тапёр) или текст сообщения
+  function findFromCard(btn) {
+    var it = btn.closest('.rq-it');
+    var card = btn.closest('.rq');
+    var tt = it && it.querySelector('.tt');
+    var msg = card && card.querySelector('.rq-m');
+    var q = (tt && tt.textContent) || (msg && msg.textContent) || '';
+    q = q.replace(/[«»"“”]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!q || !els.search) return;
+    els.search.value = q;
+    try { els.search.focus({ preventScroll: true }); } catch (e) { /* старый браузер */ }
+    doSearch(q);
+  }
+
   /* ── команды ───────────────────────────────────────────────────── */
   async function sendCommand(cmd) {
     if (stopped || !cmd || typeof cmd.c !== 'string' || !C) return;
@@ -490,7 +504,7 @@
       });
       if (res.status === 404) { ended(); return; }
       if (!res.ok) throw new Error('bad reply');
-      schedulePoll(400);      // внеочередной опрос: нажатие видно через 1–2 с
+      schedulePoll(RELAY.indexOf('http://') === 0 ? 80 : 300);      // внеочередной опрос: ответ ПК — сразу
     } catch (e) {
       showStatus('Нажатие не ушло. Проверь связь.', 'err', 4000);
     }
@@ -498,6 +512,9 @@
 
   /* ── запуск страницы ───────────────────────────────────────────── */
   function init() {
+    // Новая ссылка пульта в той же вкладке меняет только часть после # — браузер страницу не перезагружает,
+    // и она держала старую (закрытую) сессию. Новая сессия — новая загрузка (16.11).
+    window.addEventListener('hashchange', function () { if (location.hash.length > 20) location.reload(); });
     if (els.tabDock) els.tabDock.addEventListener('click', function () { setTab('dock'); });
     if (els.tabFeed) els.tabFeed.addEventListener('click', function () { setTab('feed'); });
     if (els.prev) els.prev.addEventListener('click', function () { sendCommand({ c: 'tr', a: 'prev' }); });
@@ -529,6 +546,9 @@
         if (v != null) dataset[keys[i]] = String(v).slice(0, 80);
       }
       if (!dataset.rq) return;
+      // «Искать сам» / «Это заказ — искать»: в окне Тапёра они открывают поиск на ПК — с телефона это
+      // бесполезно (и пульт такие кнопки не пропускает). Здесь — ищем в поиске самого пульта (16.11).
+      if (dataset.rq === 'find' || dataset.rq === 'textfind') { findFromCard(btn); return; }
       sendCommand({ c: 'rq', dataset: dataset });
     });
 
