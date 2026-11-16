@@ -23,17 +23,30 @@ function safeUrl(value, allowHttp) {
   }
 }
 
+// Список облаков по порядку. Старое поле url читается как список из одного.
+function relayList(json) {
+  const out = [];
+  const push = (value) => {
+    const url = safeUrl(value, true);
+    if (url && out.indexOf(url) < 0) out.push(url);
+  };
+  if (json && Array.isArray(json.relays)) for (const value of json.relays) push(value);
+  if (!out.length && json) push(json.url);
+  return out;
+}
+
 function loadConfig(file = RELAY_FILE, fsImpl = fs) {
+  const empty = { relays: [], url: '', page: DEFAULT_PAGE };
   let raw = '';
-  try { raw = fsImpl.readFileSync(file, 'utf8'); } catch (e) { return { url: '', page: DEFAULT_PAGE }; }
+  try { raw = fsImpl.readFileSync(file, 'utf8'); } catch (e) { return empty; }
   let json = null;
-  try { json = JSON.parse(raw); } catch (e) { return { url: '', page: DEFAULT_PAGE }; }
-  if (!json || typeof json !== 'object') return { url: '', page: DEFAULT_PAGE };
-  const url = safeUrl(json.url, true);
+  try { json = JSON.parse(raw); } catch (e) { return empty; }
+  if (!json || typeof json !== 'object') return empty;
+  const relays = relayList(json);
   let page = safeUrl(json.page, false);
   if (!page) page = DEFAULT_PAGE;
   if (page.slice(-1) !== '/') page += '/';
-  return { url, page };
+  return { relays, url: relays[0] || '', page };
 }
 
 function friendly(code, status) {
@@ -112,4 +125,4 @@ function createRelay(opts = {}) {
   };
 }
 
-module.exports = { DEFAULT_PAGE, RELAY_FILE, TIMEOUT_MS, loadConfig, createRelay, safeUrl };
+module.exports = { DEFAULT_PAGE, RELAY_FILE, TIMEOUT_MS, loadConfig, relayList, createRelay, safeUrl };

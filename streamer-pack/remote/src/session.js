@@ -5,17 +5,18 @@
 
 const nodeCrypto = require('./crypto');
 const { snapForPhone, feedForPhone, signature } = require('./filter');
+const { hostDelay } = require('./poll');
 const { DEFAULT_PAGE } = require('./relay');
 
 const MISSING_BRIDGE = 'Обнови Тапёр — пульту нужен Тапёр новее';
 const NO_CLOUD = 'облако пульта не настроено';
 const ENDED = 'Сессия закончилась — подключи телефон заново';
 const NETWORK = 'нет связи с облаком пульта';
+const FALLBACK = 'Связь через запасное облако — отсканируй код заново';
 
 const WANT_WINDOW = 60 * 1000;          // телефон был меньше минуты назад — собираем снимок и ленту
 const PHONE_MISSING = 60 * 1000;        // столько ждём телефон после показа QR (подсказка «не подключился»)
-const PHONE_FAST = 30 * 1000;           // телефон на связи — опрос раз в секунду
-const PHONE_SLOW = 2 * 60 * 60 * 1000;  // телефона нет два часа — опрос раз в 30 секунд
+const CLOUD_SILENT = 30 * 1000;         // облако сессии молчит дольше — уходим на запасное
 const MSG_OLD = 120 * 1000;             // команда старше двух минут — не выполняем
 const MSG_FUTURE = 60 * 1000;           // команда из будущего больше минуты — не выполняем
 const NONCE_KEEP = 1000;
@@ -121,9 +122,11 @@ function defaultSchedule(fn, ms) {
   return () => clearTimeout(t);
 }
 
-function phoneUrl(page, sid, key) {
+// Номер облака в адресе: #sid.ключ.номер; облако №0 пишется без номера.
+function phoneUrl(page, sid, key, cloud) {
   const base = typeof page === 'string' && page ? page : DEFAULT_PAGE;
-  return (base.slice(-1) === '/' ? base : base + '/') + '#' + sid + '.' + key;
+  const n = Number.isSafeInteger(cloud) && cloud > 0 ? '.' + cloud : '';
+  return (base.slice(-1) === '/' ? base : base + '/') + '#' + sid + '.' + key + n;
 }
 
 class RemoteSession {
@@ -153,7 +156,11 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.commandAt = null;    // когда пришла команда телефона: 20 с опрашиваем чаще
     this.shownAt = null;      // когда показали QR: через минуту без телефона — подсказка phone-missing
+    this.cloudOkAt = null;    // когда облако сессии последний раз ответило
+    this.fallbackNotice = null; // ушли на запасное облако — просим отсканировать новый QR
+    this.failingOver = false;
 
     this.ack = 0;
     this.seen = [];
@@ -197,6 +204,17 @@ class RemoteSession {
     return this.phoneAt != null && this.now() - this.phoneAt < WANT_WINDOW;
   }
 
+  // Номер облака сессии: у настоящего списка облаков — свой, у режима Wi-Fi и подделок — 0.
+  cloudNumber() {
+    const n = this.relay && Number.isSafeInteger(this.relay.index) ? this.relay.index : 0;
+    return n > 0 ? n : 0;
+  }
+
+  cloudCount() {
+    const n = this.relay && Number.isSafeInteger(this.relay.count) ? this.relay.count : 1;
+    return n > 0 ? n : 1;
+  }
+
   status() {
     const ago = this.phoneAt == null ? null : Math.max(0, Math.round(this.now() - this.phoneAt));
     const waiting = this.shownAt == null ? null : Math.max(0, Math.round(this.now() - this.shownAt));
@@ -205,8 +223,10 @@ class RemoteSession {
       phoneAgo: ago,
       url: this.url || '',
       qrSvg: this.qrSvg || '',
-      error: this.error || null,
-      hint: this.phoneAt == null && waiting != null && waiting >= PHONE_MISSING ? 'phone-missing' : null
+      error: this.error || this.fallbackNotice || null,
+      hint: this.phoneAt == null && waiting != null && waiting >= PHONE_MISSING ? 'phone-missing' : null,
+      notice: this.fallbackNotice || null,
+      cloud: { index: this.cloudNumber(), count: this.cloudCount() }
     };
   }
 
@@ -243,7 +263,7 @@ class RemoteSession {
   }
 
   phoneAddress() {
-    return phoneUrl(this.page, this.sid, this.crypto.b64u(this.key));
+    return phoneUrl(this.page, this.sid, this.crypto.b64u(this.key), this.cloudNumber());
   }
 
   clearSession() {
@@ -257,7 +277,9 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.commandAt = null;
     this.shownAt = null;
+    this.cloudOkAt = null;
     this.ack = 0;
     this.seen = [];
     this.seenSet = new Set();
@@ -268,7 +290,7 @@ class RemoteSession {
     this.lastFeedSig = '';
   }
 
-  async start() {
+  async start(options = {}) {
     if (this.running) return this.status();
     if (!this.dock || !this.feed) {
       this.setState('error', MISSING_BRIDGE);
@@ -279,6 +301,9 @@ class RemoteSession {
       return this.status();
     }
 
+    // Новый запуск после «Новой ссылки» снимает просьбу сканировать заново;
+    // при переходе на запасное облако она остаётся.
+    if (!this.failingOver) this.fallbackNotice = null;
     this.running = true;
     this.busy = false;
     this.retryMs = RETRY_MIN;
@@ -287,7 +312,8 @@ class RemoteSession {
     this.setWant(false);
 
     let res;
-    try { res = await this.relay.new(); }
+    const from = options && Number.isSafeInteger(options.start) ? { start: options.start } : undefined;
+    try { res = await this.relay.new(from); }
     catch (e) { res = { ok: false, status: 0, code: 'network', error: NETWORK, retryable: true }; }
 
     if (!this.running) return this.status();
@@ -324,6 +350,7 @@ class RemoteSession {
     }
     this.setState('waiting', null);
     this.shownAt = this.now();
+    this.cloudOkAt = this.now();
     await this.pollOnce();
     return this.status();
   }
@@ -334,6 +361,8 @@ class RemoteSession {
     const relay = this.relay;
     this.running = false;
     this.busy = false;
+    this.failingOver = false;     // остановили — переход на запасное облако не начинаем
+    this.fallbackNotice = null;
     this.unsubscribe();
     this.setWant(false);
     this.clearSession();
@@ -350,11 +379,12 @@ class RemoteSession {
   }
 
   delay() {
-    if (this.phoneAt == null) return 5000;
-    const ago = this.now() - this.phoneAt;
-    if (ago < PHONE_FAST) return 1000;
-    if (ago < PHONE_SLOW) return 5000;
-    return 30000;
+    return hostDelay({
+      now: this.now(),
+      phoneAt: this.phoneAt,
+      commandAt: this.commandAt,
+      missingSince: this.shownAt
+    });
   }
 
   arm(ms) {
@@ -436,6 +466,11 @@ class RemoteSession {
         this.setState('idle', ENDED);
         return;
       }
+      if (this.shouldFailover()) {
+        this.setWant(false);
+        await this.failover();
+        return;
+      }
       this.setState('lost', (res && res.error) || NETWORK);
       this.setWant(false);
       this.arm(this.retryMs);
@@ -443,10 +478,12 @@ class RemoteSession {
       return;
     }
 
+    this.cloudOkAt = this.now();
     const data = replyData(res);
     const hasPhone = data.phoneAgo !== undefined && data.phoneAgo !== null && Number.isFinite(Number(data.phoneAgo));
     if (hasPhone) {
       this.phoneAt = this.now() - Math.max(0, Number(data.phoneAgo));
+      this.fallbackNotice = null;       // телефон уже на новом облаке — просьба сканировать снята
       if (this.state !== 'connected') this.setState('connected', null);
     } else if (this.state === 'lost' || this.state === 'starting') {
       this.setState('waiting', null);
@@ -463,6 +500,38 @@ class RemoteSession {
 
     this.retryMs = RETRY_MIN;
     this.arm(this.delay());
+  }
+
+  shouldFailover() {
+    if (this.failingOver) return false;
+    if (this.cloudCount() < 2) return false;
+    if (this.cloudOkAt == null) return false;
+    return this.now() - this.cloudOkAt > CLOUD_SILENT;
+  }
+
+  // Облако сессии молчит > 30 с: закрываем старую сессию и открываем новую
+  // на следующем облаке. Ключ новый — телефону нужен новый QR.
+  async failover() {
+    if (this.failingOver) return;
+    this.failingOver = true;
+    try {
+      const old = this.relay;
+      const sid = this.sid;
+      const host = this.host;
+      if (sid && host && old && typeof old.end === 'function') {
+        try { await old.end({ sid, host }); } catch (e) { /* старая сессия уже недоступна */ }
+      }
+      if (!this.failingOver) return;   // пока закрывали старую сессию, пульт выключили
+      const next = (this.cloudNumber() + 1) % this.cloudCount();
+      this.running = false;
+      this.busy = false;
+      this.clearSession();
+      this.fallbackNotice = FALLBACK;
+      this.log('перехожу на запасное облако');
+      await this.start({ start: next });
+    } finally {
+      this.failingOver = false;
+    }
   }
 
   freshCommand(obj) {
@@ -495,6 +564,7 @@ class RemoteSession {
       if (!obj || !this.freshCommand(obj)) continue;
       const out = bridgeCommand(obj);
       if (!out) continue;
+      this.commandAt = this.now();     // после команды опрашиваем облако чаще
       try {
         if (out.kind === 'dock' && this.dock && typeof this.dock.cmd === 'function') this.dock.cmd(out.cmd);
         else if (out.kind === 'rq' && this.feed && typeof this.feed.rq === 'function') this.feed.rq(out.dataset);
@@ -515,6 +585,8 @@ module.exports = {
   NETWORK,
   WANT_WINDOW,
   PHONE_MISSING,
+  CLOUD_SILENT,
+  FALLBACK,
   RETRY_MIN,
   RETRY_MAX
 };

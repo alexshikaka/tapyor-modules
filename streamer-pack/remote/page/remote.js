@@ -5,9 +5,10 @@
   'use strict';
 
   var cfg = window.REMOTE_CONFIG && typeof window.REMOTE_CONFIG === 'object' ? window.REMOTE_CONFIG : {};
-  var RELAY = typeof cfg.url === 'string' ? cfg.url.trim().replace(/\/+$/, '') : '';
+  var RELAYS = relayList(cfg);
   var C = window.RemoteCrypto;
   var D = window.RemoteDock;
+  var P = window.RemotePoll;
   var ENDED = 'Пульт отключён в Тапёре. Отсканируй новый QR-код';
   var LOST = 'Нет связи с Тапёром';
   var PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z"/></svg>';
@@ -27,10 +28,12 @@
   var parsed = parseHash(location.hash);
   var sid = parsed ? parsed.sid : '';
   var key = parsed ? parsed.key : '';
+  var RELAY = parsed ? (RELAYS[parsed.cloud] || '') : '';
   var stopped = false;
   var visible = !document.hidden;
   var pollTimer = null;
   var pollBusy = false;
+  var tappedAt = null;
   var lastOk = Date.now();
   var online = null;
   var sv = 0;
@@ -51,9 +54,30 @@
     if (/^(all|don|chat|pts)$/.test(saved || '')) feedFilter = saved;
   } catch (e) { /* приватный режим */ }
 
+  // Список облаков из config.js; старое поле url читается как облако №0.
+  function relayList(config) {
+    var out = [];
+    if (config && Array.isArray(config.relays)) {
+      for (var i = 0; i < config.relays.length; i++) {
+        var v = config.relays[i];
+        if (typeof v !== 'string') continue;
+        v = v.trim().replace(/\/+$/, '');
+        if (v && out.indexOf(v) < 0) out.push(v);
+      }
+    }
+    if (!out.length && config && typeof config.url === 'string') {
+      var u = config.url.trim().replace(/\/+$/, '');
+      if (u) out.push(u);
+    }
+    return out;
+  }
+
+  // #sid.ключ или #sid.ключ.номер облака (№0 — без номера).
   function parseHash(hash) {
-    var m = /^#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/.exec(String(hash || ''));
-    return m ? { sid: m[1], key: m[2] } : null;
+    var m = /^#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})(?:\.(\d{1,4}))?$/.exec(String(hash || ''));
+    if (!m) return null;
+    var cloud = m[3] == null ? 0 : Number(m[3]);
+    return { sid: m[1], key: m[2], cloud: cloud };
   }
 
   function make(tag, cls, text) {
@@ -256,10 +280,27 @@
       'op=poll&sid=' + encodeURIComponent(sid) + '&sv=' + sv + '&fv=' + fv + '&es=' + es;
   }
 
+  function pollDelay(retry) {
+    if (!visible) return null;
+    if (P && typeof P.phoneDelay === 'function') {
+      return P.phoneDelay({ now: Date.now(), tappedAt: tappedAt, visible: visible, retry: !!retry });
+    }
+    return retry ? 2000 : 3000;
+  }
+
   function schedulePoll(ms) {
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
     if (stopped || !visible) return;
+    if (ms == null) ms = pollDelay(false);
+    if (ms == null) return;
     pollTimer = setTimeout(function () { pollTimer = null; poll(); }, Math.max(0, ms));
+  }
+
+  // Любое нажатие: 20 с опрашиваем раз в секунду (и сразу ускоряем ближайший опрос).
+  function noteTap() {
+    tappedAt = Date.now();
+    if (stopped || !visible || pollBusy || !pollTimer) return;
+    schedulePoll(pollDelay(false));
   }
 
   async function poll() {
@@ -301,13 +342,13 @@
           if (ev) onEvent(ev);
         }
       }
-      schedulePoll(1000);
+      schedulePoll();
     } catch (e) {
       if (Date.now() - lastOk > 5000) {
         setOnline(false);
         showStatus(LOST, 'lost');
       }
-      schedulePoll(2000);
+      schedulePoll(pollDelay(true));
     } finally {
       pollBusy = false;
     }
@@ -408,6 +449,7 @@
   /* ── команды ───────────────────────────────────────────────────── */
   async function sendCommand(cmd) {
     if (stopped || !cmd || typeof cmd.c !== 'string' || !C) return;
+    noteTap();
     var body = {};
     for (var k in cmd) if (Object.prototype.hasOwnProperty.call(cmd, k)) body[k] = cmd[k];
     body.n = randomToken(8);
@@ -441,6 +483,7 @@
       if (np) els.playpause.setAttribute('aria-pressed', np.playing ? 'false' : 'true');
     });
     document.body.classList.add('tab-dock');
+    document.addEventListener('pointerdown', noteTap, { passive: true });
 
     if (els.flt) els.flt.addEventListener('click', function (e) {
       var b = e.target.closest('[data-f]');
@@ -517,7 +560,7 @@
     }
     if (!RELAY) {
       stopped = true;
-      showStatus('облако пульта не настроено', 'err');
+      showStatus(RELAYS.length ? 'Облако пульта не найдено — отсканируй код заново' : 'облако пульта не настроено', 'err');
       return;
     }
     setOnline(false);

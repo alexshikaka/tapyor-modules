@@ -296,6 +296,19 @@ test('SESSION: want включается с телефоном и выключа
   assert.equal(h.session.status().state, 'connected', 'телефон всё ещё подключён, просто давно молчит');
 });
 
+test('SESSION: после команды телефон опрашивается раз в 1 с, через 20 с — обычный опрос', async () => {
+  const h = setup();
+  await withData(h);
+  h.clock.now += 5000;
+  await sendPhone(h.session, { c: 'remove', i: 0, key: 'ym:1' });
+  await h.session.pollOnce();
+  assert.equal(h.session.delay(), 1000, 'команда только что пришла');
+  h.clock.now += 19999;
+  assert.equal(h.session.delay(), 1000);
+  h.clock.now += 1;
+  assert.equal(h.session.delay(), 3000, '20 с после команды прошли');
+});
+
 test('SESSION: 404 no-session → idle и понятная ошибка', async () => {
   const h = setup();
   await withData(h);
@@ -360,7 +373,7 @@ test('SESSION: сеть пропала — lost и повтор 2→30 с, по�
   await session.pollOnce();
   assert.equal(session.status().state, 'waiting');
   assert.equal(session.status().error, null);
-  assert.equal(schedule.last().ms, 5000, 'после успеха — обычный опрос без телефона');
+  assert.equal(schedule.last().ms, 10000, 'после успеха — опрос без телефона раз в 10 с');
 
   assert.equal(core.logs.filter((l) => l === 'пульт: нет связи с облаком').length, 1, 'лог только при смене состояния');
 });

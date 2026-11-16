@@ -21,8 +21,14 @@ function readRelay(file) {
   try { json = JSON.parse(raw); } catch (e) {
     throw new Error('relay.json не разбирается: ' + file);
   }
-  const url = json && typeof json.url === 'string' ? json.url.trim() : '';
-  return { url };
+  const relays = [];
+  const push = (value) => {
+    const url = typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
+    if (url && relays.indexOf(url) < 0) relays.push(url);
+  };
+  if (json && Array.isArray(json.relays)) for (const value of json.relays) push(value);
+  if (!relays.length && json) push(json.url);
+  return { relays, url: relays[0] || '' };
 }
 
 export function syncRemotePage(options = {}) {
@@ -46,11 +52,12 @@ export function syncRemotePage(options = {}) {
   }
   fs.copyFileSync(coreCss, path.join(dst, 'app.css'));
 
-  const config = '/* Адрес облака пульта. Файл создан tools/sync-remote-page.mjs из relay.json. */\n' +
-    'window.REMOTE_CONFIG = { url: ' + JSON.stringify(relay.url) + ' };\n';
+  const config = '/* Список облаков пульта. Файл создан tools/sync-remote-page.mjs из relay.json. */\n' +
+    'window.REMOTE_CONFIG = { relays: ' + JSON.stringify(relay.relays) +
+    ', url: ' + JSON.stringify(relay.url) + ' };\n';
   fs.writeFileSync(path.join(dst, 'config.js'), config, 'utf8');
 
-  return { out, dst, copied: copied.concat(['app.css', 'config.js']).sort(), url: relay.url };
+  return { out, dst, copied: copied.concat(['app.css', 'config.js']).sort(), relays: relay.relays, url: relay.url };
 }
 
 const invoked = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;

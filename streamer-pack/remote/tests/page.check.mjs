@@ -128,8 +128,10 @@ async function main() {
   const sPiece = C.seal(KEY, SID, 's', snapshot());
   const fPiece = C.seal(KEY, SID, 'f', feed());
 
+  const hosts = [];
   const relay = async (url, opts = {}) => {
     const u = new URL(String(url));
+    hosts.push(u.hostname);
     const op = u.searchParams.get('op');
     if (op === 'poll') {
       return { status: 200, body: { sv: 1, s: sPiece, fv: 1, f: fPiece, ev: [], hostAgo: 120 } };
@@ -185,13 +187,14 @@ async function main() {
     }
     await page.exposeFunction('__remoteRelay', relay);
     await page.addInitScript(() => {
-      window.REMOTE_CONFIG = { url: 'https://relay.test' };
+      // Список облаков: адрес с номером 1 должен брать второе облако.
+      window.REMOTE_CONFIG = { relays: ['https://one.test', 'https://relay.test'], url: 'https://one.test' };
       window.fetch = async function (url, opts) {
         const r = await window.__remoteRelay(String(url), opts ? { method: opts.method, body: opts.body } : {});
         return new Response(JSON.stringify(r.body), { status: r.status || 200, headers: { 'Content-Type': 'application/json' } });
       };
     });
-    const url = 'http://127.0.0.1:' + port + '/remote/#' + SID + '.' + C.b64u(KEY);
+    const url = 'http://127.0.0.1:' + port + '/remote/#' + SID + '.' + C.b64u(KEY) + '.1';
     await page.goto(url, { waitUntil: 'domcontentloaded' });
 
     const rowsOk = await waitUntil(() => page.locator('#dockHost .q').count().then((n) => n >= 8));
@@ -203,6 +206,7 @@ async function main() {
     }
     assert.ok(rowsOk, 'плейлист должен нарисоваться');
     assert.ok(feedOk, 'лента должна нарисоваться');
+    assert.deepEqual([...new Set(hosts)], ['relay.test'], 'адрес с номером 1 берёт второе облако из config.js');
 
     assert.equal(await page.locator('#tabDock').isVisible(), true, 'вкладка «Плейлист» видна');
     assert.equal(await page.locator('#tabFeed').isVisible(), true, 'вкладка «Сообщения» видна');
@@ -256,7 +260,7 @@ async function main() {
 
     assert.deepEqual(errors, [], 'на странице не должно быть ошибок');
 
-    console.log('OK: страница пульта — 390×844 и 844×390, команды remove/rq ушли, script не исполнился');
+    console.log('OK: страница пульта — 390×844 и 844×390, облако №1 из config.js, команды remove/rq ушли, script не исполнился');
     console.log('Снимки: ' + path.join(shots, 'remote-portrait.png') + ', ' + path.join(shots, 'remote-landscape.png'));
 
     // Режим Wi-Fi: настоящий http://127.0.0.1, страница без crypto.subtle — AES-GCM на чистом JS.
