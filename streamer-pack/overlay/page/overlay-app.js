@@ -1195,6 +1195,16 @@
       if (!ov.classList.contains('motion-hidden')) { centerMotion(); fitPlate(); }
     }, 250);
     requestAnimationFrame(rafLoop);
+    // Превью в окне Тапёра (16.11): рамка оверлея на экране 1920×1080 — для вида «Крупно».
+    // Только размеры, без данных трека; в OBS (без preview) не отправляется.
+    if (PREVIEW && window.parent && window.parent !== window) setInterval(function () {
+      if (MOTION && ov.classList.contains('motion-hidden')) return;
+      var a = ov.getBoundingClientRect(), b = S.root ? S.root.getBoundingClientRect() : a;
+      if (!(a.width > 0) && !(b.width > 0)) return;
+      if (!(b.width > 0)) b = a; if (!(a.width > 0)) a = b;
+      var x1 = Math.min(a.left, b.left), y1 = Math.min(a.top, b.top), x2 = Math.max(a.right, b.right), y2 = Math.max(a.bottom, b.bottom);
+      try { window.parent.postMessage({ tapyorOvBox: { page: MOTION ? 'motion' : 'playlist', x: x1, y: y1, w: x2 - x1, h: y2 - y1 } }, '*'); } catch (e) { /* нет родителя */ }
+    }, 500);
     window.addEventListener('resize', function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { fitAll(); if (MOTION) { fitPlate(); centerMotion(); } });
     // Шрифты лежат в паке, но браузер грузит их только по первому требованию: при быстром переключении стиля
