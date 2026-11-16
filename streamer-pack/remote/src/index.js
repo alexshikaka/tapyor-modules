@@ -21,8 +21,12 @@ class Remote {
     this.now = typeof deps.now === 'function' ? deps.now : Date.now;
     const config = deps.config || relay.loadConfig(deps.relayFile);
     this.page = deps.page || (config && config.page) || relay.DEFAULT_PAGE;
+    // Адреса облака: от ядра (core.remote.relays — закрытый src/remote-server.json ядра), иначе из relay.json.
+    // В открытом репозитории пака адресов облачных функций не храним (AGENTS.md), 16.11.
+    const fromCore = this.core.remote && Array.isArray(this.core.remote.relays) && this.core.remote.relays.length ? this.core.remote.relays : null;
     const relayUrls = Array.isArray(deps.relayUrls) ? deps.relayUrls
-      : (config && Array.isArray(config.relays) ? config.relays
+      : fromCore ? fromCore
+      : (config && Array.isArray(config.relays) && config.relays.length ? config.relays
         : (config && config.url ? [config.url] : []));
     this.cloudRelay = deps.relay || clouds.createClouds({
       urls: relayUrls,

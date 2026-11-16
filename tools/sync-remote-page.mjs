@@ -3,7 +3,8 @@
 // Запуск (по команде владельца, не автоматически):
 //   node tools/sync-remote-page.mjs [путь-сайта] [путь-к-app.css]
 // По умолчанию: ../tapyor-web и ../Tapyor-player/src/app.css.
-// config.js пишется из streamer-pack/remote/relay.json — адрес функции в репозитории не хранится.
+// config.js пишется из src/remote-server.json ядра (третий аргумент; по умолчанию ../Tapyor-player/src/remote-server.json),
+// а если его нет — из streamer-pack/remote/relay.json. Адрес функции в открытом репозитории пака не хранится.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,7 +35,8 @@ function readRelay(file) {
 export function syncRemotePage(options = {}) {
   const out = path.resolve(options.out || path.resolve(process.cwd(), '..', 'tapyor-web'));
   const coreCss = path.resolve(options.coreCss || path.resolve(process.cwd(), '..', 'Tapyor-player', 'src', 'app.css'));
-  const relayFile = path.resolve(options.relayFile || RELAY_FILE);
+  const coreRelay = path.resolve(options.coreRelay || path.resolve(process.cwd(), '..', 'Tapyor-player', 'src', 'remote-server.json'));
+  const relayFile = path.resolve(options.relayFile || (fs.existsSync(coreRelay) ? coreRelay : RELAY_FILE));
   const pageDir = path.resolve(options.pageDir || PAGE_DIR);
 
   if (!fs.existsSync(pageDir)) throw new Error('не найдена папка страницы: ' + pageDir);
@@ -64,7 +66,8 @@ const invoked = process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).
 if (invoked) {
   const args = process.argv.slice(2);
   try {
-    const res = syncRemotePage({ out: args[0], coreCss: args[1] });
+    const res = syncRemotePage({ out: args[0], coreCss: args[1], coreRelay: args[2] });
+    if (!res.relays.length) throw new Error('нет адреса облака пульта (src/remote-server.json ядра) — страница через интернет не заработает');
     console.log('Страница пульта: ' + res.dst + ' (файлов: ' + res.copied.length + ')');
   } catch (e) {
     console.error('Не удалось выложить страницу пульта: ' + (e && e.message ? e.message : e));
