@@ -10,6 +10,7 @@
   var HOLD_MS = 280;          // столько держать палец, чтобы строка поднялась
   var SLOP = 8;               // сдвиг пальца до подъёма — это прокрутка, а не перетаскивание
   var EDGE = 56;              // у края списка — автопрокрутка во время перетаскивания
+  var SRC_COLOR = { ym: '#FFD43B', yt: '#FF5A52', sc: '#FF7A1A', au: '#CC0FE0', bc: '#41A8C6', lc: '#4ADE9A', tap: '#9B87FF' };
 
   function make(tag, cls, text) {
     var el = document.createElement(tag);
@@ -256,7 +257,12 @@
     var title = make('div', 't', item.title || 'Без названия');
     if (group && group.length > 1) title.appendChild(make('span', 'bk', group.length + ' глав'));
     main.appendChild(title);
-    main.appendChild(make('div', 's', subtitle(item)));
+    var sub = make('div', 's');
+    var dot = make('span', 'sd');                      // цветная точка площадки, как в окне Тапёра
+    dot.style.background = SRC_COLOR[item.src] || 'var(--tx4)';
+    sub.appendChild(dot);
+    sub.appendChild(document.createTextNode(subtitle(item)));
+    main.appendChild(sub);
     row.appendChild(main);
 
     function play() {

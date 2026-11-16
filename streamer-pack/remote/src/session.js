@@ -95,6 +95,11 @@ function bridgeCommand(o) {
       const id = shortStr(o.id, 40);
       return q && id ? { kind: 'dock', cmd: { c, q, id } } : null;
     }
+    case 'more': {     // следующие 15 треков выдачи, с номера from (n занято защитой от повтора), 16.11
+      const id = shortStr(o.id, 40);
+      const from = indexNum(o.from);
+      return id && from != null ? { kind: 'dock', cmd: { c, id, from } } : null;
+    }
     case 'add':
     case 'playnow': {
       const r = shortStr(o.r, 200);

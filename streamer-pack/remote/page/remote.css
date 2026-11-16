@@ -470,19 +470,31 @@ body.tab-feed .col-feed { display: flex; }
   left: 8px;
   right: 8px;
   top: max(118px, calc(env(safe-area-inset-top) + 104px));
-  max-height: 56vh;
-  overflow-y: auto;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg2);
   border: 1px solid var(--ln);
   border-radius: 12px;
   box-shadow: 0 16px 40px var(--shadow);
-  padding: 4px;
   z-index: 6;
+  overflow: hidden;
 }
+.res[hidden] { display: none; }
+/* Заголовок выдачи стоит на месте, листаются только треки; крестик справа закрывает выдачу (16.11) */
+.res-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px;
+  border-bottom: 1px solid var(--ln2); background: var(--bg2); }
+.res-title { flex: 1; min-width: 0; color: var(--tx3); font-size: 11.5px; font-weight: 600; }
+.res-x { width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--tx3);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.res-x:active { background: var(--hov); }
+.res-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px; }
+.res-more { padding: 10px; text-align: center; color: var(--tx4); font-size: 11.5px; }
 .res .q { min-height: 44px; }
 .res .cov { width: 34px; height: 34px; }
 .res .pb { min-height: 30px; padding: 0 8px; }
-.res-title { padding: 8px 8px 4px; color: var(--tx4); font-size: 11px; }
+/* Цветная точка площадки — как в выдаче окна Тапёра */
+.sd { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin: 0 5px 1px 0; vertical-align: middle; flex: 0 0 auto; }
 .banner {
   position: absolute;
   left: 8px;
