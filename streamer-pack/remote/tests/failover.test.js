@@ -131,6 +131,29 @@ test('ОБЛАКО: телефон пришёл на новое облако —
   assert.equal(st.phoneAgo, 0);
 });
 
+test('ОБЛАКО: выключение во время перехода не открывает новую сессию', async () => {
+  const h = setup();
+  await h.session.start();
+  h.state.failIndex = 0;
+  h.clock.now += CLOUD_SILENT + 1000;
+
+  let first = true;
+  h.relay.end = async (body) => {
+    h.state.ended.push(body);
+    if (first) {
+      first = false;
+      await h.session.stop();     // стример выключил пульт, пока закрывалась старая сессия
+    }
+    return { ok: true };
+  };
+  await h.session.pollOnce();
+
+  const st = h.session.status();
+  assert.equal(st.state, 'idle');
+  assert.equal(st.url, '');
+  assert.deepEqual(h.state.calls, [0], 'новую сессию не открываем');
+});
+
 test('ОБЛАКО: одно облако — перехода нет, остаётся «нет связи»', async () => {
   const clock = { now: 1763300000000 };
   const core = fakeCore();

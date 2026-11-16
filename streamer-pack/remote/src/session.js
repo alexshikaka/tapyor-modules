@@ -361,6 +361,7 @@ class RemoteSession {
     const relay = this.relay;
     this.running = false;
     this.busy = false;
+    this.failingOver = false;     // остановили — переход на запасное облако не начинаем
     this.fallbackNotice = null;
     this.unsubscribe();
     this.setWant(false);
@@ -520,6 +521,7 @@ class RemoteSession {
       if (sid && host && old && typeof old.end === 'function') {
         try { await old.end({ sid, host }); } catch (e) { /* старая сессия уже недоступна */ }
       }
+      if (!this.failingOver) return;   // пока закрывали старую сессию, пульт выключили
       const next = (this.cloudNumber() + 1) % this.cloudCount();
       this.running = false;
       this.busy = false;
