@@ -178,6 +178,25 @@ function decodeText(raw) {
   return s.indexOf('\u0000') >= 0 ? s.replace(/\u0000/g, '') : s;
 }
 
+// NetworkCategory в JSON — число (Windows PowerShell) или строка (pwsh/dev).
+function categoryName(value) {
+  if (typeof value === 'number') {
+    if (value === 0) return 'Public';
+    if (value === 1) return 'Private';
+    if (value === 2) return 'DomainAuthenticated';
+    return '';
+  }
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (!s) return '';
+    if (s === '0') return 'Public';
+    if (s === '1') return 'Private';
+    if (s === '2') return 'DomainAuthenticated';
+    return s;
+  }
+  return '';
+}
+
 function parseProfiles(raw) {
   let json = null;
   try { json = JSON.parse(decodeText(raw)); } catch (e) { return null; }
@@ -186,7 +205,7 @@ function parseProfiles(raw) {
   for (const p of list) {
     if (!p || typeof p !== 'object') continue;
     const alias = typeof p.InterfaceAlias === 'string' ? p.InterfaceAlias : '';
-    const category = typeof p.NetworkCategory === 'string' ? p.NetworkCategory : '';
+    const category = categoryName(p.NetworkCategory);
     if (alias || category) out.push({ alias, category });
   }
   return out;

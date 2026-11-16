@@ -92,6 +92,16 @@ test('NETINFO: профиль сети Windows — разбор JSON, Public/Pri
   );
   assert.equal(N.parseProfiles('не json'), null);
   assert.equal(N.parseProfiles(''), null);
+  // Windows PowerShell отдаёт NetworkCategory числом: 0 — Public, 1 — Private, 2 — Domain.
+  assert.deepEqual(
+    N.parseProfiles('[{"InterfaceAlias":"Wi-Fi","NetworkCategory":0},{"InterfaceAlias":"Ethernet","NetworkCategory":1},{"InterfaceAlias":"Домен","NetworkCategory":2}]'),
+    [
+      { alias: 'Wi-Fi', category: 'Public' },
+      { alias: 'Ethernet', category: 'Private' },
+      { alias: 'Домен', category: 'DomainAuthenticated' }
+    ]
+  );
+  assert.deepEqual(N.parseProfiles('{"InterfaceAlias":"Wi-Fi","NetworkCategory":"0"}'), [{ alias: 'Wi-Fi', category: 'Public' }]);
   // UTF-16LE из Windows PowerShell через трубу.
   const utf16 = Buffer.from('{"InterfaceAlias":"Wi-Fi","NetworkCategory":"Public"}', 'utf16le');
   assert.deepEqual(N.parseProfiles(utf16), [{ alias: 'Wi-Fi', category: 'Public' }]);
