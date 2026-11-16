@@ -9,8 +9,11 @@
   var C = window.RemoteCrypto;
   var D = window.RemoteDock;
   var P = window.RemotePoll;
+  var E = window.RemoteExtras;
   var ENDED = 'Пульт отключён в Тапёре. Отсканируй новый QR-код';
+  var ENDED_SAVED = 'Отсканируй новый QR-код в Тапёре';
   var LOST = 'Нет связи с Тапёром';
+  var LOST_MS = 5000;
   var PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z"/></svg>';
   var PAUSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
 
@@ -26,6 +29,15 @@
   };
 
   var parsed = parseHash(location.hash);
+  var fromSaved = false;
+  // Без # (страница открыта со значка) берём последнюю сессию этого телефона.
+  // Новый # в адресе всегда важнее сохранённого.
+  if (!parsed && /^#?$/.test(String(location.hash || '')) && E && typeof E.readSaved === 'function') {
+    parsed = E.readSaved();
+    fromSaved = !!parsed;
+  }
+  var savedOnce = false;
+  var wake = null;
   var sid = parsed ? parsed.sid : '';
   var key = parsed ? parsed.key : '';
   var RELAY = parsed ? (RELAYS[parsed.cloud] || '') : '';
@@ -134,7 +146,18 @@
     online = on;
     if (els.dot) els.dot.classList.toggle('off', !on);
     if (els.phoneAgo) els.phoneAgo.textContent = on ? 'на связи' : 'нет связи';
+    if (wake) wake.setConnected(on);
     if (on) hideStatus('lost');
+  }
+
+  // Успешная связь: запоминаем адрес только на этом телефоне (ключ, sid, облако, режим).
+  function rememberSession() {
+    if (savedOnce || !parsed || !E || typeof E.saveSaved !== 'function') return;
+    savedOnce = true;
+    E.saveSaved({
+      sid: parsed.sid, key: parsed.key, cloud: parsed.cloud,
+      mode: RELAY.indexOf('http://') === 0 ? 'lan' : 'cloud'
+    });
   }
 
   function setTab(which) {
@@ -316,8 +339,9 @@
         throw new Error('bad reply');
       }
       lastOk = Date.now();
+      rememberSession();
       var hostAgo = Number(data.hostAgo);
-      if (Number.isFinite(hostAgo) && hostAgo > 5000) {
+      if (Number.isFinite(hostAgo) && hostAgo > LOST_MS) {
         setOnline(false);
         showStatus(LOST, 'lost');
       } else {
@@ -344,7 +368,7 @@
       }
       schedulePoll();
     } catch (e) {
-      if (Date.now() - lastOk > 5000) {
+      if (Date.now() - lastOk > LOST_MS) {
         setOnline(false);
         showStatus(LOST, 'lost');
       }
@@ -357,8 +381,9 @@
   function ended() {
     stopped = true;
     if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    if (E && typeof E.clearSaved === 'function') E.clearSaved();
     setOnline(false);
-    showStatus(ENDED, 'err');
+    showStatus(fromSaved ? ENDED_SAVED : ENDED, 'err');
   }
 
   function onEvent(ev) {
@@ -541,7 +566,7 @@
 
     setInterval(function () {
       if (stopped || !visible) return;
-      if (Date.now() - lastOk > 5000) {
+      if (Date.now() - lastOk > LOST_MS) {
         setOnline(false);
         showStatus(LOST, 'lost');
       }
@@ -553,6 +578,7 @@
       showStatus('Страница пульта не загрузилась. Обнови страницу.', 'err');
       return;
     }
+    if (E && typeof E.createWakeLock === 'function') wake = E.createWakeLock(window);
     if (!parsed) {
       stopped = true;
       showStatus('Открой ссылку из Тапёра — по QR-коду из настроек.', 'err');
