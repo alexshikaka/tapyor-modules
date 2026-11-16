@@ -108,6 +108,7 @@ test('ОБЛАКО: молчит 30 с — новая сессия на след
   const st = h.session.status();
   assert.equal(st.state, 'waiting');
   assert.equal(st.notice, FALLBACK);
+  assert.equal(st.error, FALLBACK, 'текущее окно настроек видит текст через error');
   assert.match(st.url, /#B{22}\.[A-Za-z0-9_-]{43}\.1$/, 'номер облака в адресе');
   assert.deepEqual(st.cloud, { index: 1, count: 2 });
   assert.ok(!h.core.logs.some((l) => l.includes(oldSid) || l.includes(h.session.sid)), 'в лог не попадают sid');
@@ -127,6 +128,7 @@ test('ОБЛАКО: телефон пришёл на новое облако —
   await h.session.pollOnce();
   const st = h.session.status();
   assert.equal(st.notice, null);
+  assert.equal(st.error, null, 'просьба сканировать снята и из error');
   assert.equal(st.state, 'connected');
   assert.equal(st.phoneAgo, 0);
 });

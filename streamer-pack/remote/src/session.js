@@ -223,7 +223,7 @@ class RemoteSession {
       phoneAgo: ago,
       url: this.url || '',
       qrSvg: this.qrSvg || '',
-      error: this.error || null,
+      error: this.error || this.fallbackNotice || null,
       hint: this.phoneAt == null && waiting != null && waiting >= PHONE_MISSING ? 'phone-missing' : null,
       notice: this.fallbackNotice || null,
       cloud: { index: this.cloudNumber(), count: this.cloudCount() }
