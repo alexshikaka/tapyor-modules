@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src https:">
+  <meta name="theme-color" content="#222222">
+  <title>Пульт Тапёра</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="remote.css">
+</head>
+<body class="tab-dock">
+  <div class="scr">
+    <header class="top">
+      <div class="brand">
+        <span class="dot" id="dot" aria-hidden="true"></span>
+        <span class="logo">Тапёр</span>
+        <span class="lnk" id="phoneAgo">подключаюсь…</span>
+      </div>
+      <label class="sbox">
+        <span class="mag" aria-hidden="true">⌕</span>
+        <input id="search" type="search" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Найти трек…" aria-label="Найти трек">
+      </label>
+      <div class="tabs" role="tablist" aria-label="Панели пульта">
+        <button id="tabDock" class="on" type="button" role="tab" aria-selected="true">Плейлист</button>
+        <button id="tabFeed" type="button" role="tab" aria-selected="false">Сообщения<span class="n" id="tabCount">0</span></button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+    <div id="results" class="res" hidden></div>
+
+    <main class="body">
+      <section class="col col-dock" id="panelDock" aria-label="Плейлист">
+        <div class="colh">Плейлист</div>
+        <div class="list" id="dockHost" aria-live="polite"></div>
+      </section>
+      <section class="col col-feed" id="panelFeed" aria-label="Сообщения">
+        <div class="colh" id="feedHead">Сообщения · 0</div>
+        <div class="fl" id="flt" role="group" aria-label="Какие сообщения показывать">
+          <button type="button" data-f="all" class="on">Все <i>0</i></button>
+          <button type="button" data-f="don">Донаты <i>0</i></button>
+          <button type="button" data-f="chat">Твич чат <i>0</i></button>
+          <button type="button" data-f="pts">Баллы канала <i>0</i></button>
+        </div>
+        <div class="list" id="feed" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <button class="fb" id="prev" type="button" aria-label="Назад">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14l-10-7z"/></svg>
+      </button>
+      <button class="fb play" id="playpause" type="button" aria-label="Играть или пауза">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z"/></svg>
+      </button>
+      <button class="fb" id="next" type="button" aria-label="Вперёд">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5v14l10-7z"/></svg>
+      </button>
+      <div class="np">
+        <b id="npTitle">ничего не играет</b>
+        <span id="npArtist"></span>
+        <div class="bar"><i id="bar"></i></div>
+      </div>
+      <span class="tm" id="time">0:00</span>
+    </footer>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="crypto.js"></script>
+  <script src="render-dock.js"></script>
+  <script src="remote.js"></script>
+</body>
+</html>

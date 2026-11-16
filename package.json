@@ -16,7 +16,8 @@
     "check:overlays:align": "node tools/check-overlays.mjs --align=1",
     "check:overlays:queue": "node tools/check-overlays.mjs --queue=1",
     "check:overlays:shift": "node tools/check-overlays.mjs --shift=1",
-    "check:overlays:swap": "node tools/check-swap.mjs"
+    "check:overlays:swap": "node tools/check-swap.mjs",
+    "check:remote": "node streamer-pack/remote/tests/page.check.mjs"
   },
   "devDependencies": {
     "playwright": "^1.65.1"
