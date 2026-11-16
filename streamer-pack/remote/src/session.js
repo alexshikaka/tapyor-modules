@@ -5,6 +5,7 @@
 
 const nodeCrypto = require('./crypto');
 const { snapForPhone, feedForPhone, signature } = require('./filter');
+const { hostDelay } = require('./poll');
 const { DEFAULT_PAGE } = require('./relay');
 
 const MISSING_BRIDGE = 'Обнови Тапёр — пульту нужен Тапёр новее';
@@ -16,8 +17,6 @@ const FALLBACK = 'Связь через запасное облако — отс
 const WANT_WINDOW = 60 * 1000;          // телефон был меньше минуты назад — собираем снимок и ленту
 const PHONE_MISSING = 60 * 1000;        // столько ждём телефон после показа QR (подсказка «не подключился»)
 const CLOUD_SILENT = 30 * 1000;         // облако сессии молчит дольше — уходим на запасное
-const PHONE_FAST = 30 * 1000;           // телефон на связи — опрос раз в секунду (заменяется в poll.js)
-const PHONE_SLOW = 2 * 60 * 60 * 1000;  // телефона нет два часа — опрос раз в 30 секунд
 const MSG_OLD = 120 * 1000;             // команда старше двух минут — не выполняем
 const MSG_FUTURE = 60 * 1000;           // команда из будущего больше минуты — не выполняем
 const NONCE_KEEP = 1000;
@@ -157,6 +156,7 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.commandAt = null;    // когда пришла команда телефона: 20 с опрашиваем чаще
     this.shownAt = null;      // когда показали QR: через минуту без телефона — подсказка phone-missing
     this.cloudOkAt = null;    // когда облако сессии последний раз ответило
     this.fallbackNotice = null; // ушли на запасное облако — просим отсканировать новый QR
@@ -277,6 +277,7 @@ class RemoteSession {
     this.url = '';
     this.qrSvg = '';
     this.phoneAt = null;
+    this.commandAt = null;
     this.shownAt = null;
     this.cloudOkAt = null;
     this.ack = 0;
@@ -377,11 +378,12 @@ class RemoteSession {
   }
 
   delay() {
-    if (this.phoneAt == null) return 5000;
-    const ago = this.now() - this.phoneAt;
-    if (ago < PHONE_FAST) return 1000;
-    if (ago < PHONE_SLOW) return 5000;
-    return 30000;
+    return hostDelay({
+      now: this.now(),
+      phoneAt: this.phoneAt,
+      commandAt: this.commandAt,
+      missingSince: this.shownAt
+    });
   }
 
   arm(ms) {
@@ -560,6 +562,7 @@ class RemoteSession {
       if (!obj || !this.freshCommand(obj)) continue;
       const out = bridgeCommand(obj);
       if (!out) continue;
+      this.commandAt = this.now();     // после команды опрашиваем облако чаще
       try {
         if (out.kind === 'dock' && this.dock && typeof this.dock.cmd === 'function') this.dock.cmd(out.cmd);
         else if (out.kind === 'rq' && this.feed && typeof this.feed.rq === 'function') this.feed.rq(out.dataset);
