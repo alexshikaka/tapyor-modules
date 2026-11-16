@@ -30,7 +30,7 @@ test('SYNC: страница, app.css и config.js с адресом из relay.
     const dst = path.join(out, 'remote');
 
     assert.equal(res.dst, dst);
-    for (const name of ['index.html', 'remote.css', 'remote.js', 'crypto.js', 'render-dock.js', 'config.js', 'app.css']) {
+    for (const name of ['index.html', 'remote.css', 'remote.js', 'crypto.js', 'aes-gcm.js', 'render-dock.js', 'config.js', 'app.css']) {
       assert.ok(fs.existsSync(path.join(dst, name)), 'должен быть ' + name);
       assert.ok(res.copied.includes(name), 'в списке должен быть ' + name);
     }

@@ -1,15 +1,28 @@
-/* Шифрование пульта на телефоне: WebCrypto + CompressionStream, формат как в src/crypto.js.
-   Кусок: base64url(iv 12 ‖ шифртекст ‖ тег 16), aad = sid + '|' + вид.
+/* Шифрование пульта на телефоне: WebCrypto, а без crypto.subtle (обычный http://) —
+   AES-256-GCM из page/aes-gcm.js. Формат как в src/crypto.js:
+   base64url(iv 12 ‖ флаг сжатия 1 ‖ шифртекст ‖ тег 16), aad = sid + '|' + вид.
+   Флаг: 1 — deflate-raw (CompressionStream), 0 — без сжатия. Старые куски без флага читаются.
    Файл чистый (без DOM): тесты загружают его в Node и сверяют с серверной стороной. */
 (function (global) {
   'use strict';
 
   var KEY_LEN = 32;
   var IV_LEN = 12;
+  var TAG_LEN = 16;
+  var FLAG_NONE = 0;
+  var FLAG_DEFLATE = 1;
 
-  function webCrypto() {
-    if (global.crypto && global.crypto.subtle && global.crypto.getRandomValues) return global.crypto;
-    throw new Error('браузер не умеет WebCrypto');
+  function hasSubtle() {
+    return !!(global.crypto && global.crypto.subtle && global.crypto.getRandomValues);
+  }
+
+  function randomBytes(n) {
+    var out = new Uint8Array(n);
+    if (global.crypto && global.crypto.getRandomValues) {
+      global.crypto.getRandomValues(out);
+      return out;
+    }
+    throw new Error('браузер не умеет случайные числа');
   }
 
   function b64u(bytes) {
@@ -41,7 +54,9 @@
     if (ArrayBuffer.isView(key)) {
       return key.byteLength === KEY_LEN ? new Uint8Array(key.buffer, key.byteOffset, key.byteLength) : null;
     }
-    if (key instanceof ArrayBuffer) return key.byteLength === KEY_LEN ? new Uint8Array(key) : null;
+    if (Object.prototype.toString.call(key) === '[object ArrayBuffer]') {
+      return key.byteLength === KEY_LEN ? new Uint8Array(key) : null;
+    }
     if (typeof key === 'string') {
       var b = unb64u(key);
       if (b && b.length === KEY_LEN) return b;
@@ -55,9 +70,7 @@
   }
 
   function newKey() {
-    var k = new Uint8Array(KEY_LEN);
-    webCrypto().getRandomValues(k);
-    return k;
+    return randomBytes(KEY_LEN);
   }
 
   // Streams: CompressionStream/DecompressionStream есть в браузере и в Node 18+.
@@ -86,6 +99,14 @@
     });
   }
 
+  function hasCompress() {
+    return typeof global.CompressionStream === 'function';
+  }
+
+  function hasDecompress() {
+    return typeof global.DecompressionStream === 'function';
+  }
+
   function deflateRaw(bytes) { return pipe(new global.CompressionStream('deflate-raw'), bytes); }
   function inflateRaw(bytes) { return pipe(new global.DecompressionStream('deflate-raw'), bytes); }
 
@@ -94,7 +115,7 @@
   }
 
   async function importKey(k) {
-    return webCrypto().subtle.importKey('raw', k, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    return global.crypto.subtle.importKey('raw', k, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
   }
 
   async function seal(key, sid, kind, obj) {
@@ -104,17 +125,62 @@
     if (typeof kind !== 'string' || !kind) throw new Error('нет вида куска');
     var text = JSON.stringify(obj);
     if (typeof text !== 'string') throw new Error('кусок не превращается в JSON');
-    var plain = await deflateRaw(new TextEncoder().encode(text));
-    var iv = new Uint8Array(IV_LEN);
-    webCrypto().getRandomValues(iv);
-    var ck = await importKey(k);
-    var enc = new Uint8Array(await webCrypto().subtle.encrypt(
-      { name: 'AES-GCM', iv: iv, additionalData: aad(sid, kind), tagLength: 128 }, ck, plain
-    ));
-    var out = new Uint8Array(IV_LEN + enc.length);
+
+    var plain = new TextEncoder().encode(text);
+    var flag = FLAG_NONE;
+    if (hasCompress()) {
+      plain = await deflateRaw(plain);
+      flag = FLAG_DEFLATE;
+    }
+    var iv = randomBytes(IV_LEN);
+    var extra = aad(sid, kind);
+    var enc;
+    if (hasSubtle()) {
+      var ck = await importKey(k);
+      enc = new Uint8Array(await global.crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv, additionalData: extra, tagLength: 128 }, ck, plain
+      ));
+    } else {
+      var A = global.RemoteAesGcm;
+      if (!A) throw new Error('нет AES-GCM');
+      var r = A.encrypt(k, iv, extra, plain);
+      enc = new Uint8Array(r.cipher.length + r.tag.length);
+      enc.set(r.cipher, 0);
+      enc.set(r.tag, r.cipher.length);
+    }
+    var out = new Uint8Array(IV_LEN + 1 + enc.length);
     out.set(iv, 0);
-    out.set(enc, IV_LEN);
+    out[IV_LEN] = flag;
+    out.set(enc, IV_LEN + 1);
     return b64u(out);
+  }
+
+  async function decryptAt(k, sid, kind, raw, offset, flag) {
+    var iv = raw.subarray(0, IV_LEN);
+    var body = raw.subarray(offset);
+    if (body.length < TAG_LEN) return null;
+    var extra = aad(sid, kind);
+    var plain;
+    if (hasSubtle()) {
+      try {
+        var ck = await importKey(k);
+        plain = new Uint8Array(await global.crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: iv, additionalData: extra, tagLength: 128 }, ck, body
+        ));
+      } catch (e) {
+        return null;
+      }
+    } else {
+      var A = global.RemoteAesGcm;
+      if (!A) return null;
+      plain = A.decrypt(k, iv, extra, body.subarray(0, body.length - TAG_LEN), body.subarray(body.length - TAG_LEN));
+      if (!plain) return null;
+    }
+    if (flag === FLAG_DEFLATE) {
+      if (!hasDecompress()) return null;
+      try { plain = await inflateRaw(plain); } catch (e) { return null; }
+    }
+    try { return JSON.parse(new TextDecoder().decode(plain)); } catch (e) { return null; }
   }
 
   async function open(key, sid, kind, piece) {
@@ -122,21 +188,38 @@
       var k = keyBytes(key);
       if (!k || typeof sid !== 'string' || !sid || typeof kind !== 'string' || !kind) return null;
       var raw = unb64u(piece);
-      if (!raw || raw.length < IV_LEN + 16) return null;
-      var iv = raw.subarray(0, IV_LEN);
-      var body = raw.subarray(IV_LEN);
-      var ck = await importKey(k);
-      var plain = new Uint8Array(await webCrypto().subtle.decrypt(
-        { name: 'AES-GCM', iv: iv, additionalData: aad(sid, kind), tagLength: 128 }, ck, body
-      ));
-      var text = new TextDecoder().decode(await inflateRaw(plain));
-      return JSON.parse(text);
+      if (!raw || raw.length < IV_LEN + TAG_LEN) return null;
+
+      // Новый формат: iv ‖ флаг ‖ шифртекст ‖ тег.
+      if (raw.length >= IV_LEN + 1 + TAG_LEN) {
+        var flag = raw[IV_LEN];
+        if (flag === FLAG_NONE || flag === FLAG_DEFLATE) {
+          var got = await decryptAt(k, sid, kind, raw, IV_LEN + 1, flag);
+          if (got !== null) return got;
+        }
+      }
+
+      // Старый формат (RM2): iv ‖ шифртекст ‖ тег, всегда deflate-raw.
+      return await decryptAt(k, sid, kind, raw, IV_LEN, FLAG_DEFLATE);
     } catch (e) {
       return null;
     }
   }
 
-  var api = { newKey: newKey, b64u: b64u, unb64u: unb64u, keyBytes: keyBytes, seal: seal, open: open, KEY_LEN: KEY_LEN, IV_LEN: IV_LEN };
+  var api = {
+    newKey: newKey,
+    b64u: b64u,
+    unb64u: unb64u,
+    keyBytes: keyBytes,
+    seal: seal,
+    open: open,
+    hasSubtle: hasSubtle,
+    KEY_LEN: KEY_LEN,
+    IV_LEN: IV_LEN,
+    TAG_LEN: TAG_LEN,
+    FLAG_NONE: FLAG_NONE,
+    FLAG_DEFLATE: FLAG_DEFLATE
+  };
   global.RemoteCrypto = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

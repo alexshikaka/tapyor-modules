@@ -15,6 +15,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const PAGE_DIR = path.join(ROOT, 'streamer-pack', 'remote', 'page');
 const C = require(path.join(ROOT, 'streamer-pack', 'remote', 'src', 'crypto.js'));
 const { snapForPhone, feedForPhone } = require(path.join(ROOT, 'streamer-pack', 'remote', 'src', 'filter.js'));
+const { createLanServer } = require(path.join(ROOT, 'streamer-pack', 'remote', 'src', 'lan-relay.js'));
+const { RemoteSession } = require(path.join(ROOT, 'streamer-pack', 'remote', 'src', 'session.js'));
 
 const KEY = Buffer.from(Array.from({ length: 32 }, (_, i) => (i * 7 + 3) & 255));
 const SID = Buffer.from(Array.from({ length: 16 }, (_, i) => (i * 11 + 5) & 255)).toString('base64url');
@@ -72,6 +74,30 @@ function feed() {
     card('chat', 'dimon_plays', '<span class="tw">!sr</span>', '!sr кино перемен', 'Перемен', 'Кино · точно') +
     card('pts', 'lisa_tv', '<span class="amt">баллы</span>', 'Выхода нет', 'Выхода нет', 'Сплин · точно');
   return feedForPhone({ feedHtml: html, msgCount: 3, reqAuto: true, np: { title: 'Хочешь?', artist: 'Земфира', playing: true, pos: 42, dur: 221 } });
+}
+
+function fakeCore() {
+  const core = {
+    dockCalls: [],
+    logs: [],
+    remote: {
+      qr: () => '<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>',
+      dock: {
+        on(fn) { core.dockFn = fn; return () => { core.dockFn = null; }; },
+        want() {},
+        cmd(obj) { core.dockCalls.push(obj); return { ok: true }; },
+        get() { return null; }
+      },
+      feed: {
+        on(fn) { core.feedFn = fn; return () => { core.feedFn = null; }; },
+        want() {},
+        rq() {},
+        setting() {}
+      }
+    },
+    log(line) { core.logs.push(line); }
+  };
+  return core;
 }
 
 function waitUntil(fn, ms = 5000) {
@@ -232,6 +258,65 @@ async function main() {
 
     console.log('OK: страница пульта — 390×844 и 844×390, команды remove/rq ушли, script не исполнился');
     console.log('Снимки: ' + path.join(shots, 'remote-portrait.png') + ', ' + path.join(shots, 'remote-landscape.png'));
+
+    // Режим Wi-Fi: настоящий http://127.0.0.1, страница без crypto.subtle — AES-GCM на чистом JS.
+    const lanCore = fakeCore();
+    const lan = createLanServer({ address: '127.0.0.1', port: 0, pageDir: PAGE_DIR });
+    const lanInfo = await lan.start();
+    const lanErrors = [];
+    let lanSession = null;
+    try {
+      assert.equal(lanInfo.selfOk, true, 'сервер Wi-Fi отвечает сам себе по /ping');
+      lanSession = new RemoteSession(lanCore, {
+        relay: lan.channel(),
+        page: lanInfo.base + '/',
+        now: () => Date.now()
+      });
+      const lanStarted = await lanSession.start();
+      assert.equal(lanStarted.state, 'waiting');
+      lanCore.dockFn(snapshot());
+      lanCore.feedFn(feed());
+      await lanSession.pollOnce();
+
+      const lanContext = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 1,
+        isMobile: true,
+        hasTouch: true
+      });
+      // Как на обычном http://: crypto.subtle браузер не даёт.
+      await lanContext.addInitScript(() => {
+        Object.defineProperty(window.Crypto.prototype, 'subtle', {
+          configurable: true,
+          get() { return undefined; }
+        });
+      });
+      const lanPage = await lanContext.newPage();
+      lanPage.on('pageerror', (e) => lanErrors.push(String(e && e.message ? e.message : e)));
+      const lanUrl = lanInfo.base + '/#' + lanSession.sid + '.' + C.b64u(lanSession.key);
+      await lanPage.goto(lanUrl, { waitUntil: 'domcontentloaded' });
+      assert.equal(await lanPage.evaluate(() => !window.crypto.subtle), true, 'crypto.subtle убран принудительно');
+
+      const lanRows = await waitUntil(() => lanPage.locator('#dockHost .q').count().then((n) => n >= 8));
+      const lanFeed = await waitUntil(() => lanPage.locator('#feed .rq').count().then((n) => n >= 3));
+      assert.ok(lanRows, 'по http плейлист должен нарисоваться через чистый AES-GCM');
+      assert.ok(lanFeed, 'по http лента должна нарисоваться через чистый AES-GCM');
+      assert.match(await lanPage.locator('#dockHost .q .t').first().textContent() || '', /Нервы/);
+
+      await lanPage.locator('#dockHost .q .rm').first().click();
+      const lanGot = await waitUntil(async () => {
+        await lanSession.pollOnce();
+        return lanCore.dockCalls.length > 0;
+      }, 5000);
+      assert.ok(lanGot, 'команда с http-страницы доходит до ядра');
+      assert.equal(lanCore.dockCalls[0].c, 'remove');
+      assert.equal(lanCore.dockCalls[0].key, 'ym:1');
+      assert.deepEqual(lanErrors, [], 'на http-странице не должно быть ошибок');
+      console.log('OK: режим Wi-Fi — страница по http://127.0.0.1 без crypto.subtle, команда remove дошла');
+    } finally {
+      if (lanSession) await lanSession.stop();
+      await lan.stop();
+    }
   } finally {
     await browser.close();
     await new Promise((resolve) => server.close(resolve));
