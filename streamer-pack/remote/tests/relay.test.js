@@ -18,19 +18,50 @@ test('RELAY: relay.json читается, адрес страницы норма
     fs.writeFileSync(file, JSON.stringify({ url: 'https://functions.example/id/', page: 'https://site.example/remote' }), 'utf8');
     const cfg = loadConfig(file);
     assert.equal(cfg.url, 'https://functions.example/id');
+    assert.deepEqual(cfg.relays, ['https://functions.example/id'], 'старое поле url — список из одного');
     assert.equal(cfg.page, 'https://site.example/remote/');
 
     fs.writeFileSync(file, JSON.stringify({ url: 'javascript:alert(1)', page: 'ftp://bad' }), 'utf8');
     const bad = loadConfig(file);
+    assert.deepEqual(bad.relays, []);
     assert.equal(bad.url, '');
     assert.equal(bad.page, DEFAULT_PAGE);
 
     fs.writeFileSync(file, 'не json', 'utf8');
     const broken = loadConfig(file);
-    assert.equal(broken.url, '');
-    assert.equal(broken.page, DEFAULT_PAGE);
+    assert.deepEqual(broken, { relays: [], url: '', page: DEFAULT_PAGE });
 
-    assert.deepEqual(loadConfig(path.join(dir, 'нет.json')), { url: '', page: DEFAULT_PAGE });
+    assert.deepEqual(loadConfig(path.join(dir, 'нет.json')), { relays: [], url: '', page: DEFAULT_PAGE });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('RELAY: список relays читается по порядку, мусор и повторы отброшены', () => {
+  const dir = tempDir();
+  try {
+    const file = path.join(dir, 'relay.json');
+    fs.writeFileSync(file, JSON.stringify({
+      relays: [
+        'https://one.example/fn/',
+        'https://one.example/fn',
+        'javascript:alert(1)',
+        'http://two.example/fn',
+        5,
+        ''
+      ],
+      url: 'https://old.example/fn',
+      page: 'https://site.example/remote/'
+    }), 'utf8');
+    const cfg = loadConfig(file);
+    assert.deepEqual(cfg.relays, ['https://one.example/fn', 'http://two.example/fn']);
+    assert.equal(cfg.url, 'https://one.example/fn', 'url — первое облако списка');
+
+    fs.writeFileSync(file, JSON.stringify({ relays: [] }), 'utf8');
+    assert.deepEqual(loadConfig(file).relays, [], 'пустой список — облаков нет');
+
+    fs.writeFileSync(file, JSON.stringify({ relays: ['https://one.example/fn'], url: 'https://old.example/fn' }), 'utf8');
+    assert.deepEqual(loadConfig(file).relays, ['https://one.example/fn'], 'новое поле важнее старого');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

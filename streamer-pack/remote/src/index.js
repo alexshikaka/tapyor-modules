@@ -6,6 +6,7 @@
 
 const os = require('node:os');
 const relay = require('./relay');
+const clouds = require('./clouds');
 const netinfo = require('./netinfo');
 const lanRelay = require('./lan-relay');
 const { RemoteSession } = require('./session');
@@ -19,8 +20,11 @@ class Remote {
     this.now = typeof deps.now === 'function' ? deps.now : Date.now;
     const config = deps.config || relay.loadConfig(deps.relayFile);
     this.page = deps.page || (config && config.page) || relay.DEFAULT_PAGE;
-    this.cloudRelay = deps.relay || relay.createRelay({
-      url: config.url,
+    const relayUrls = Array.isArray(deps.relayUrls) ? deps.relayUrls
+      : (config && Array.isArray(config.relays) ? config.relays
+        : (config && config.url ? [config.url] : []));
+    this.cloudRelay = deps.relay || clouds.createClouds({
+      urls: relayUrls,
       page: this.page,
       fetch: deps.fetch,
       timeoutMs: deps.timeoutMs

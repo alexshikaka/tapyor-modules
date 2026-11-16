@@ -40,8 +40,31 @@ test('SYNC: страница, app.css и config.js с адресом из relay.
     );
     assert.equal(fs.readFileSync(path.join(dst, 'app.css'), 'utf8'), '/* ядро */\n:root { --bg0: #222222; }\n');
     const config = fs.readFileSync(path.join(dst, 'config.js'), 'utf8');
-    assert.match(config, /window\.REMOTE_CONFIG = \{ url: "https:\/\/functions\.example\/relay" \};/);
-    assert.match(fs.readFileSync(path.join(PAGE, 'config.js'), 'utf8'), /url: ''/, 'исходный config.js не переписывается');
+    assert.match(config, /window\.REMOTE_CONFIG = \{ relays: \["https:\/\/functions\.example\/relay"\], url: "https:\/\/functions\.example\/relay" \};/);
+    assert.match(fs.readFileSync(path.join(PAGE, 'config.js'), 'utf8'), /relays: \[\]/, 'исходный config.js не переписывается');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('SYNC: несколько облаков попадают в config.js по порядку', async () => {
+  const dir = tempDir();
+  try {
+    const out = path.join(dir, 'site');
+    const coreCss = path.join(dir, 'core', 'app.css');
+    fs.mkdirSync(path.dirname(coreCss), { recursive: true });
+    fs.writeFileSync(coreCss, '/* ядро */\n', 'utf8');
+    const relayFile = path.join(dir, 'relay.json');
+    fs.writeFileSync(relayFile, JSON.stringify({
+      relays: ['https://one.example/fn/', 'https://two.example/fn']
+    }), 'utf8');
+
+    const { syncRemotePage } = await import(pathToFileURL(TOOL).href);
+    const res = syncRemotePage({ out, coreCss, relayFile, pageDir: PAGE });
+    assert.deepEqual(res.relays, ['https://one.example/fn', 'https://two.example/fn']);
+    const config = fs.readFileSync(path.join(out, 'remote', 'config.js'), 'utf8');
+    assert.match(config, /relays: \["https:\/\/one\.example\/fn","https:\/\/two\.example\/fn"\]/);
+    assert.match(config, /url: "https:\/\/one\.example\/fn"/, 'url — первое облако, для старой страницы');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
