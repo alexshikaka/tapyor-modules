@@ -228,7 +228,6 @@
     if (!feed || typeof feed !== 'object') return;
     feedState = feed;
     var count = Math.max(0, Math.trunc(Number(feed.msgCount) || 0));
-    if (els.tabCount) els.tabCount.textContent = String(count);
     if (els.feedHead) els.feedHead.textContent = 'Сообщения · ' + count;
     var html = typeof feed.feedHtml === 'string' ? feed.feedHtml : '';
     if (html !== lastFeedHtml) {
@@ -238,6 +237,14 @@
       if (!clean) els.feed.replaceChildren(make('div', 'dock-empty', 'Сообщений пока нет'));
       applyFilter();
     }
+    // Цифра на вкладке — как счётчик вкладки «Заказы» в окне Тапёра (rqBadge): сколько точных заказов
+    // ждут решения — ещё не в очереди, не отклонены и сумма достаточна. Встал в очередь — цифра уменьшается.
+    var waiting = 0;
+    var its = els.feed.querySelectorAll('.rq-it.ex');
+    for (var w = 0; w < its.length; w++) {
+      if (its[w].querySelector('[data-rq="add"]') && !its[w].querySelector('.rq-fl .pay')) waiting++;
+    }
+    if (els.tabCount) { els.tabCount.textContent = String(waiting); els.tabCount.hidden = !waiting; }
     if (!dockSnap) updateNp();
   }
 

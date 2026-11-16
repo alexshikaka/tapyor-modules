@@ -245,6 +245,11 @@ body.tab-feed .col-feed { display: flex; }
 @keyframes q-tap { 50% { transform: scale(.985); } }
 .q.gone { opacity: 0; transform: translateX(28px); height: 0 !important; min-height: 0; padding-top: 0; padding-bottom: 0;
   transition: opacity .16s, transform .16s, height .18s .05s, padding .18s .05s; overflow: hidden; }
+.who { font-size: 11px; line-height: 1.25; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who b { font-weight: 700; }
+.q.don .who, .q.cmd .who, .q.sb .who, .q.pts .who { color: inherit; }
+.q.don .who { color: var(--req); } .q.cmd .who, .q.sb .who { color: var(--req-cmd); } .q.pts .who { color: var(--req-pts); }
+.tabs .n[hidden] { display: none; }
 .qtime { flex: 0 0 auto; min-width: 34px; text-align: right; font: 500 10.5px var(--mono); color: var(--tx4); }
 .qn-h { padding: 10px 8px 4px; font: 700 9.5px var(--f); letter-spacing: .1em; text-transform: uppercase; color: var(--tx4); }
 @media (prefers-reduced-motion: reduce) { .q, .q.gone { transition: none; } .q.settle, .q.tap { animation: none; } }

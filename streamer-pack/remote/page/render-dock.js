@@ -55,11 +55,17 @@
     if (item.artist) parts.push(item.artist);
     if (item.srcName) parts.push(item.srcName);
     if (item.bg) parts.push('фон');
-    if (item.req && item.req.who) {
-      var mark = item.req.sb ? 'Streamer.bot ' : item.req.kind === 'cmd' ? 'Twitch ' : item.req.kind === 'pts' ? 'баллы ' : '₽ ';
-      parts.push(mark + item.req.who);
-    }
     return parts.join(' · ');
+  }
+
+  // Кто заказал — отдельной строкой: в конце подписи ник обрезался многоточием на узком экране (16.11)
+  function whoLine(item) {
+    if (!item.req || !item.req.who) return null;
+    var how = item.req.sb ? 'Streamer.bot' : item.req.kind === 'cmd' ? 'Twitch' : item.req.kind === 'pts' ? 'баллы канала' : 'донат';
+    var el = make('div', 'who');
+    el.appendChild(make('b', null, item.req.who));
+    el.appendChild(document.createTextNode(' · ' + how));
+    return el;
   }
 
   function actionButton(cls, text, label, onClick) {
@@ -263,6 +269,8 @@
     sub.appendChild(dot);
     sub.appendChild(document.createTextNode(subtitle(item)));
     main.appendChild(sub);
+    var who = whoLine(item);
+    if (who) main.appendChild(who);
     row.appendChild(main);
 
     function play() {
