@@ -1,6 +1,7 @@
 'use strict';
-// Расписание опроса облака со стороны Тапёра (бережём облако):
-// телефон был < 30 с назад — раз в 3 с, после команды 20 с — раз в 1 с;
+// Расписание опроса со стороны Тапёра (16.11: отклик важнее — опрос только пока телефон на связи):
+// облако — телефон был < 30 с назад — раз в 1 с, после команды 20 с — раз в 0,4 с;
+// Wi-Fi — ящик в самом Тапёре, сети нет: при телефоне раз в 0,12 с, без него раз в 1 с;
 // телефона нет — раз в 10 с; нет телефона 2 ч — раз в 60 с.
 // Чистые функции и подставное время: проверяются без таймеров.
 
@@ -8,8 +9,10 @@ const PHONE_RECENT = 30 * 1000;        // телефон считается на
 const COMMAND_ACTIVE = 20 * 1000;      // после пришедшей команды опрашиваем чаще
 const PHONE_GONE = 2 * 60 * 60 * 1000; // столько без телефона — совсем редкий опрос
 
-const HOST_PHONE = 3000;
-const HOST_COMMAND = 1000;
+const HOST_PHONE = 1000;
+const HOST_COMMAND = 400;
+const HOST_LAN = 120;
+const HOST_LAN_IDLE = 1000;
 const HOST_NONE = 10000;
 const HOST_NONE_LONG = 60000;
 
@@ -22,6 +25,7 @@ function age(now, at) {
 function hostDelay(opts = {}) {
   const now = Number(opts.now) || 0;
   const phoneAge = age(now, opts.phoneAt);
+  if (opts.lan) return phoneAge != null && phoneAge < PHONE_RECENT ? HOST_LAN : HOST_LAN_IDLE;
   if (phoneAge != null && phoneAge < PHONE_RECENT) {
     const commandAge = age(now, opts.commandAt);
     if (commandAge != null && commandAge < COMMAND_ACTIVE) return HOST_COMMAND;
@@ -39,6 +43,8 @@ module.exports = {
   PHONE_GONE,
   HOST_PHONE,
   HOST_COMMAND,
+  HOST_LAN,
+  HOST_LAN_IDLE,
   HOST_NONE,
   HOST_NONE_LONG,
   hostDelay

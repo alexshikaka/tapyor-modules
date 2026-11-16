@@ -41,7 +41,7 @@ class Remote {
         if (typeof deps.lanIp !== 'string' && typeof saved.lanIp === 'string') this.lanIp = saved.lanIp;
       }
     }
-    if (!this.mode) this.mode = 'cloud';
+    if (!this.mode) this.mode = 'lan';   // по умолчанию — по Wi-Fi: быстрее и без облака (владелец, 16.11)
     this.lanRun = null;
     this.public = null;
     this.createLan = typeof deps.createLan === 'function'
@@ -104,6 +104,8 @@ class Remote {
       address: chosen.ip,
       interfaces: this.interfaces,
       pageDir: this.deps.pageDir,
+      // стили окна (карточки сообщений) — берём у локального сервера самого Тапёра
+      appCssUrl: this.core.http && typeof this.core.http.url === 'function' ? this.core.http.url('/app.css') : '',
       log: (line) => this.log(line)
     });
     let info = null;
@@ -156,9 +158,11 @@ class Remote {
       if (!run) return this.status();
       this.session.relay = run.channel;
       this.session.page = run.info.base + '/';
+      this.session.lan = true;
     } else {
       this.session.relay = this.cloudRelay;
       this.session.page = this.page;
+      this.session.lan = false;
     }
     await this.session.start();
     return this.status();

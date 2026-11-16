@@ -229,7 +229,22 @@ body.tab-feed .col-feed { display: flex; }
 .q { display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 10px; min-height: 52px; }
 .q.playing { background: rgba(var(--acr), .14); }
 .q.done { opacity: .45; }
-.q.drag { outline: 2px solid var(--ac); outline-offset: -2px; background: var(--bg3); }
+/* Перестановка (16.11): долгое нажатие поднимает строку, остальные расступаются */
+.qlist { position: relative; }
+.q { position: relative; touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1), background-color .15s, opacity .18s; will-change: transform; }
+.qlist.dragging .q:not(.lift) { pointer-events: none; }
+.q.lift { z-index: 5; transition: box-shadow .15s, background-color .15s; background: var(--bg3);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .45), 0 0 0 2px rgba(var(--acr), .9); border-radius: 12px; cursor: grabbing; }
+.q.settle { animation: q-settle .26s ease-out; }
+@keyframes q-settle { 0% { box-shadow: 0 0 0 2px rgba(var(--acr), .9); } 100% { box-shadow: 0 0 0 0 rgba(var(--acr), 0); } }
+.q.tap { animation: q-tap .22s ease-out; }
+@keyframes q-tap { 50% { transform: scale(.985); } }
+.q.gone { opacity: 0; transform: translateX(28px); height: 0 !important; min-height: 0; padding-top: 0; padding-bottom: 0;
+  transition: opacity .16s, transform .16s, height .18s .05s, padding .18s .05s; overflow: hidden; }
+.qtime { flex: 0 0 auto; min-width: 34px; text-align: right; font: 500 10.5px var(--mono); color: var(--tx4); }
+.qn-h { padding: 10px 8px 4px; font: 700 9.5px var(--f); letter-spacing: .1em; text-transform: uppercase; color: var(--tx4); }
+@media (prefers-reduced-motion: reduce) { .q, .q.gone { transition: none; } .q.settle, .q.tap { animation: none; } }
 .q.bg { box-shadow: inset 2px 0 var(--ln3); }
 .cov {
   width: 42px;
@@ -515,6 +530,11 @@ body.tab-feed .col-feed { display: flex; }
   body.tab-feed .col-dock,
   body .col { display: flex; }
   .tabs { display: none; }
+  /* плейлист — справа, сообщения — слева (решение владельца 16.11) */
+  .col-dock { order: 2; }
+  .col-feed { order: 1; }
+  .col + .col { border-left: 0; }
+  .col-dock { border-left: 1px solid var(--ln2); }
   .top { flex-direction: row; align-items: center; gap: 10px; padding: 6px 12px; }
   .brand { flex: 0 0 auto; }
   .brand .lnk { display: none; }

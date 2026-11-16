@@ -381,6 +381,7 @@ function createLanServer(options = {}) {
   const nowFn = typeof options.now === 'function' ? options.now : Date.now;
   const log = typeof options.log === 'function' ? options.log : () => {};
   const core = createCore(options.store || memoryStore());
+  let appCss = null;   // стили окна Тапёра, взятые у его локального сервера (один раз)
 
   let server = null;
   let info = null;
@@ -475,10 +476,20 @@ function createLanServer(options = {}) {
       return;
     }
     if (url.pathname === '/app.css') {
-      // Стили окна Тапёра в пак не входят: страница живёт на своих remote.css.
-      fs.readFile(path.join(pageDir, 'app.css'), (err, data) => {
+      // Стили окна Тапёра в пак не входят: файл рядом (выкладка на сайт кладёт его) или берём у самого
+      // Тапёра (его локальный сервер, тот же ПК) — без них карточки сообщений рисуются без оформления.
+      const send = (data) => {
         res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(err ? '' : data);
+        res.end(data || '');
+      };
+      fs.readFile(path.join(pageDir, 'app.css'), (err, data) => {
+        if (!err && data && data.length) { send(data); return; }
+        if (appCss != null) { send(appCss); return; }
+        if (!options.appCssUrl || typeof fetch !== 'function') { send(''); return; }
+        fetch(options.appCssUrl, { signal: AbortSignal.timeout(4000) })
+          .then((r) => (r.ok ? r.text() : ''))
+          .then((t) => { if (t) appCss = t; send(t); })
+          .catch(() => send(''));
       });
       return;
     }

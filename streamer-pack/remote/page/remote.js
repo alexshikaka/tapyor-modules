@@ -306,7 +306,7 @@
   function pollDelay(retry) {
     if (!visible) return null;
     if (P && typeof P.phoneDelay === 'function') {
-      return P.phoneDelay({ now: Date.now(), tappedAt: tappedAt, visible: visible, retry: !!retry });
+      return P.phoneDelay({ now: Date.now(), tappedAt: tappedAt, visible: visible, retry: !!retry, lan: RELAY.indexOf('http://') === 0 });
     }
     return retry ? 2000 : 3000;
   }

@@ -251,15 +251,25 @@ class RemoteSession {
 
   onDock(x) {
     if (!isObject(x)) return;
-    if (x.v === 1) { this.snapRaw = x; return; }
+    if (x.v === 1) { this.snapRaw = x; this.kick(); return; }
     if (x.ev === 'search' || x.ev === 'toast') {
       this.events.push(x);
       if (this.events.length > EVENT_KEEP) this.events = this.events.slice(-EVENT_KEEP);
+      this.kick();
     }
   }
 
   onFeed(x) {
-    if (isObject(x)) this.feedRaw = x;
+    if (isObject(x)) { this.feedRaw = x; this.kick(); }
+  }
+
+  // Новое в Тапёре (очередь сдвинулась, пришла выдача) — отправить телефону сразу, не дожидаясь
+  // очередного опроса (16.11: отклик). Только пока телефон на связи, иначе — как по расписанию.
+  kick() {
+    if (!this.running || !this.sid || this.phoneAt == null) return;
+    if (this.now() - this.phoneAt > 30000) return;
+    if (this.busy) { this.kickLater = true; return; }
+    this.arm(this.lan ? 0 : 60);
   }
 
   phoneAddress() {
@@ -380,6 +390,7 @@ class RemoteSession {
 
   delay() {
     return hostDelay({
+      lan: !!this.lan,
       now: this.now(),
       phoneAt: this.phoneAt,
       commandAt: this.commandAt,
@@ -499,6 +510,7 @@ class RemoteSession {
     if (this.ack === sent.ackBefore) this.ack = 0;
 
     this.retryMs = RETRY_MIN;
+    if (this.kickLater) { this.kickLater = false; this.arm(this.lan ? 0 : 60); return; }
     this.arm(this.delay());
   }
 

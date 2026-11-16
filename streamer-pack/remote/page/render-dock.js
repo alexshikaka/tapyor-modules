@@ -1,8 +1,15 @@
 /* Плейлист из снимка пульта (docs/DOCK2.md) для страницы телефона.
-   Вся разметка создаётся через createElement, тексты — только textContent.
-   Команды уходят через api.send({ c: … }) — их отбирает модуль на ПК. */
+   Очередь — как в окне Тапёра: строки подряд, без разделов, без режима и волны (решение владельца 16.11).
+   Перестановка: долгое нажатие на строку → строка «поднимается» и едет за пальцем, остальные плавно
+   расступаются; отпустил — строка встаёт на место, команда move уходит в Тапёр. Нажатия отзываются сразу
+   (строка убирается / встаёт на место до ответа ПК), снимок с ПК потом подтверждает.
+   Вся разметка — createElement, тексты — только textContent. Команды — api.send({ c: … }). */
 (function (global) {
   'use strict';
+
+  var HOLD_MS = 280;          // столько держать палец, чтобы строка поднялась
+  var SLOP = 8;               // сдвиг пальца до подъёма — это прокрутка, а не перетаскивание
+  var EDGE = 56;              // у края списка — автопрокрутка во время перетаскивания
 
   function make(tag, cls, text) {
     var el = document.createElement(tag);
@@ -11,13 +18,7 @@
     return el;
   }
 
-  function setAttr(el, name, value) {
-    if (value != null) el.setAttribute(name, String(value));
-  }
-
-  function isHttps(value) {
-    return typeof value === 'string' && /^https:\/\//i.test(value);
-  }
+  function isHttps(value) { return typeof value === 'string' && /^https:\/\//i.test(value); }
 
   function cover(item) {
     var idx = item && Number.isFinite(Number(item.i)) ? Math.abs(Number(item.i)) : 0;
@@ -27,6 +28,7 @@
       img.alt = '';
       img.loading = 'lazy';
       img.referrerPolicy = 'no-referrer';
+      img.draggable = false;
       img.src = item.thumb;
       img.addEventListener('error', function () { if (img.parentNode) img.parentNode.removeChild(img); });
       box.textContent = '';
@@ -36,169 +38,237 @@
     return box;
   }
 
+  // Подпись — как в очереди окна: исполнитель · площадка · кто заказал
   function subtitle(item) {
     var parts = [];
-    if (item.req && item.req.who) {
-      var mark = item.req.kind === 'don' ? '₽ ' : item.req.kind === 'pts' ? 'баллы ' : item.req.kind === 'sb' ? 'Streamer.bot · ' : 'Twitch · ';
-      parts.push(mark + item.req.who);
-    }
     if (item.artist) parts.push(item.artist);
     if (item.srcName) parts.push(item.srcName);
-    if (item.dur) parts.push(item.dur);
+    if (item.bg) parts.push('фон');
+    if (item.req && item.req.who) {
+      var mark = item.req.sb ? 'Streamer.bot ' : item.req.kind === 'cmd' ? 'Twitch ' : item.req.kind === 'pts' ? 'баллы ' : '₽ ';
+      parts.push(mark + item.req.who);
+    }
     return parts.join(' · ');
   }
 
   function actionButton(cls, text, label, onClick) {
     var b = make('button', 'ib ' + cls, text);
     b.type = 'button';
-    setAttr(b, 'aria-label', label);
-    setAttr(b, 'title', label);
-    b.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      onClick();
-    });
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); onClick(); });
     return b;
   }
 
-  function separator(text) {
-    return make('div', 'sep', text);
+  // ── Состояние между отрисовками ──────────────────────────────────────────
+  var S = { drag: null, pending: null, host: null, api: null, touchGuard: false };
+
+  // Пока строка поднята, страница не должна прокручиваться пальцем (иначе браузер отберёт касание).
+  function ensureTouchGuard() {
+    if (S.touchGuard) return;
+    S.touchGuard = true;
+    document.addEventListener('touchmove', function (e) {
+      if (S.drag && S.drag.lifted && e.cancelable) e.preventDefault();
+    }, { passive: false });
   }
 
-  function modeRow(snap, send) {
-    var row = make('div', 'mode');
-    var live = snap.mode === 'live';
-    var classic = make('span', live ? '' : 'on', 'Классический');
-    var toggle = make('button', 'tgl' + (live ? ' on' : ''));
-    toggle.type = 'button';
-    toggle.setAttribute('aria-label', 'Режим очереди');
-    toggle.setAttribute('aria-pressed', live ? 'true' : 'false');
-    toggle.addEventListener('click', function () {
-      send({ c: 'mode', m: live ? 'classic' : 'live' });
+  function scroller(el) {
+    var p = el && el.parentElement;
+    while (p && p !== document.body) {
+      var oy = getComputedStyle(p).overflowY;
+      if (oy === 'auto' || oy === 'scroll') return p;
+      p = p.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* не обязательно */ } } }
+
+  // Плавно перенести строки на новые места: FLIP (запомнили — переставили — анимировали из старого места)
+  function flip(list, mutate) {
+    var rows = Array.prototype.slice.call(list.querySelectorAll('.q'));
+    var before = new Map();
+    rows.forEach(function (r) { before.set(r, r.getBoundingClientRect().top); });
+    mutate();
+    rows.forEach(function (r) {
+      if (!r.isConnected) return;
+      var dy = before.get(r) - r.getBoundingClientRect().top;
+      if (!dy) return;
+      r.style.transition = 'none';
+      r.style.transform = 'translateY(' + dy + 'px)';
+      void r.offsetHeight;
+      r.style.transition = '';
+      r.style.transform = '';
     });
-    var liveLabel = make('span', live ? 'on' : '', 'Живая очередь');
-    var count = make('span', 'c', String((snap.counts && snap.counts.pending != null ? snap.counts.pending : snap.items ? snap.items.length : 0)));
-    row.appendChild(classic);
-    row.appendChild(toggle);
-    row.appendChild(liveLabel);
-    row.appendChild(count);
-    return row;
   }
 
-  function waveCard(snap, send) {
-    var wave = snap.wave || {};
-    var card = make('div', 'wave');
-    var head = make('div', 'wave-h');
-    var play = make('button', 'pb', '▶ Волна');
-    play.type = 'button';
-    play.addEventListener('click', function () { send({ c: 'wave', a: 'play' }); });
-    var auto = make('button', 'tgl wave-auto' + (wave.auto ? ' on' : ''));
-    auto.type = 'button';
-    auto.setAttribute('aria-label', 'Волна сама ставит треки');
-    auto.setAttribute('aria-pressed', wave.auto ? 'true' : 'false');
-    auto.addEventListener('click', function () { send({ c: 'wave', a: 'auto' }); });
-    head.appendChild(play);
-    head.appendChild(make('span', 'wave-t', wave.title || 'Волна'));
-    head.appendChild(auto);
-    card.appendChild(head);
-    if (wave.sub) card.appendChild(make('div', 'wave-s', wave.sub));
-    return card;
-  }
-
-  function startDrag(ev, row, item, list, total, send) {
+  function startPress(ev, row, item, list, send) {
+    if (S.drag) return;
     if (ev.button != null && ev.button !== 0) return;
-    ev.preventDefault();
-    var sx = ev.clientX;
-    var sy = ev.clientY;
-    var dragging = false;
-    var timer = setTimeout(function () {
-      dragging = true;
-      row.classList.add('drag');
-      if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* не обязательно */ } }
-    }, 350);
-
-    function cleanup() {
-      clearTimeout(timer);
-      row.classList.remove('drag');
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', cancel);
-    }
-    function cancel() { cleanup(); }
-    function move(e) {
-      if (!dragging) {
-        if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) cleanup();
-        return;
-      }
-      if (e.cancelable) e.preventDefault();
-    }
-    function up(e) {
-      clearTimeout(timer);
-      if (!dragging) { cleanup(); return; }
-      if (e.cancelable) e.preventDefault();
-      // Долгое нажатие без движения — не перестановка.
-      if (Math.abs(e.clientX - sx) < 12 && Math.abs(e.clientY - sy) < 12) { cleanup(); return; }
-      var rows = list.querySelectorAll('.q[data-i]');
-      var to = total;
-      for (var i = 0; i < rows.length; i++) {
-        var r = rows[i];
-        var rect = r.getBoundingClientRect();
-        if (e.clientY < rect.top + rect.height / 2) {
-          to = Number(r.getAttribute('data-i')) || 0;
-          break;
-        }
-      }
-      to = Math.max(0, Math.min(total, to));
-      send({ c: 'move', i: item.i, key: item.key, to: to });
-      cleanup();
-    }
-    window.addEventListener('pointermove', move, { passive: false });
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', cancel);
+    if (ev.target.closest('button')) return;
+    ensureTouchGuard();
+    var d = S.drag = {
+      row: row, item: item, list: list, send: send, id: ev.pointerId,
+      sx: ev.clientX, sy: ev.clientY, y: ev.clientY, lifted: false, timer: 0, raf: 0,
+      rows: null, mids: null, from: -1, to: -1, h: 0, scroll: scroller(list), scroll0: 0
+    };
+    d.timer = setTimeout(function () { lift(d); }, HOLD_MS);
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
-  function queueRow(item, snap, group, list, total, send) {
+  function lift(d) {
+    if (S.drag !== d) return;
+    d.lifted = true;
+    d.rows = Array.prototype.slice.call(d.list.querySelectorAll('.q[data-i]'));
+    d.from = d.rows.indexOf(d.row);
+    d.to = d.from;
+    var r = d.row.getBoundingClientRect();
+    d.h = r.height + (parseFloat(getComputedStyle(d.list).rowGap) || 0);
+    d.scroll0 = d.scroll.scrollTop;
+    d.mids = d.rows.map(function (x) { var b = x.getBoundingClientRect(); return b.top + b.height / 2 + d.scroll0; });
+    d.list.classList.add('dragging');
+    d.row.classList.add('lift');
+    vibrate(12);
+    tick(d);
+  }
+
+  function place(d) {
+    var dy = d.y - d.sy + (d.scroll.scrollTop - d.scroll0);
+    d.row.style.transform = 'translateY(' + dy + 'px) scale(1.03)';
+    // куда встанет: середина поднятой строки относительно середин остальных
+    var mid = d.mids[d.from] + dy;
+    var to = d.from;
+    for (var k = 0; k < d.rows.length; k++) {
+      if (k < d.from && mid < d.mids[k]) { to = k; break; }
+    }
+    for (var m = d.rows.length - 1; m > d.from; m--) {
+      if (mid > d.mids[m]) { to = m; break; }
+    }
+    if (to !== d.to) { d.to = to; vibrate(4); }
+    for (var i = 0; i < d.rows.length; i++) {
+      if (i === d.from) continue;
+      var shift = 0;
+      if (d.from < d.to && i > d.from && i <= d.to) shift = -d.h;
+      if (d.from > d.to && i >= d.to && i < d.from) shift = d.h;
+      d.rows[i].style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+    }
+  }
+
+  // Автопрокрутка у краёв + перерисовка позиции раз в кадр
+  function tick(d) {
+    if (S.drag !== d || !d.lifted) return;
+    var box = d.scroll === document.scrollingElement ? { top: 0, bottom: window.innerHeight } : d.scroll.getBoundingClientRect();
+    var v = 0;
+    if (d.y < box.top + EDGE) v = -Math.ceil((box.top + EDGE - d.y) / 6);
+    else if (d.y > box.bottom - EDGE) v = Math.ceil((d.y - (box.bottom - EDGE)) / 6);
+    if (v) d.scroll.scrollTop += v;
+    place(d);
+    d.raf = requestAnimationFrame(function () { tick(d); });
+  }
+
+  function onMove(e) {
+    var d = S.drag; if (!d || e.pointerId !== d.id) return;
+    d.y = e.clientY;
+    if (!d.lifted) {
+      if (Math.abs(e.clientX - d.sx) > SLOP || Math.abs(e.clientY - d.sy) > SLOP) finish(false);
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function onUp(e) { var d = S.drag; if (!d || e.pointerId !== d.id) return; finish(true); }
+  function onCancel() { finish(false); }
+
+  function finish(drop) {
+    var d = S.drag; if (!d) return;
+    clearTimeout(d.timer);
+    cancelAnimationFrame(d.raf);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onCancel);
+    S.drag = null;
+    if (!d.lifted) { flushPending(); return; }
+    var moved = drop && d.to !== d.from;
+    // Переставляем строку в списке сразу (FLIP — без рывка), снимаем «подъём»
+    flip(d.list, function () {
+      d.rows.forEach(function (x) { x.style.transition = 'none'; x.style.transform = ''; });
+      d.row.classList.remove('lift');
+      d.list.classList.remove('dragging');
+      if (moved) {
+        var ref = d.to > d.from ? d.rows[d.to].nextSibling : d.rows[d.to];
+        d.list.insertBefore(d.row, ref);
+      }
+    });
+    d.rows.forEach(function (x) { void x.offsetHeight; x.style.transition = ''; });
+    d.row.classList.add('settle');
+    setTimeout(function () { d.row.classList.remove('settle'); }, 260);
+    if (moved) {
+      // moveItem(from, to) в окне: to — место вставки до удаления строки
+      var fromI = Number(d.item.i);
+      var target = d.rows[d.to];
+      var targetI = Number(target.getAttribute('data-i'));
+      var targetLen = Number(target.getAttribute('data-len')) || 1;
+      var to = d.to > d.from ? targetI + targetLen : targetI;
+      d.send({ c: 'move', i: fromI, key: d.item.key, to: to });
+    }
+    // свежий снимок, пришедший во время перетаскивания, — после того, как строка встала
+    setTimeout(flushPending, moved ? 280 : 0);
+  }
+
+  function flushPending() {
+    if (S.drag || !S.pending) return;
+    var p = S.pending; S.pending = null;
+    draw(p.host, p.snap, p.api);
+  }
+
+  function queueRow(item, snap, group, list, send) {
     var row = make('div', 'q');
-    var st = item.st === 'playing' || item.i === snap.cur ? 'playing' : item.st === 'done' ? 'done' : item.st === 'pend' ? 'pend' : '';
+    var st = item.st === 'playing' || item.i === snap.cur ? 'playing' : item.st;
     if (st === 'playing') row.classList.add('playing');
     if (st === 'done') row.classList.add('done');
-    if (item.req && (item.req.kind === 'don' || item.req.kind === 'cmd' || item.req.kind === 'pts' || item.req.kind === 'sb')) row.classList.add(item.req.kind);
+    if (item.req && /^(don|cmd|pts|sb)$/.test(item.req.kind)) row.classList.add(item.req.kind);
     if (item.bg) row.classList.add('bg');
     row.setAttribute('data-i', String(item.i));
     row.setAttribute('data-key', item.key || '');
-
-    var grip = make('span', 'grip', '⋮⋮');
-    grip.setAttribute('aria-label', 'Держи и тяни, чтобы переставить');
-    grip.addEventListener('pointerdown', function (e) { startDrag(e, row, item, list, total, send); });
-    row.appendChild(grip);
+    row.setAttribute('data-len', String(group ? group.length : 1));
+    row.addEventListener('pointerdown', function (e) { startPress(e, row, item, list, send); });
+    row.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
     var cov = cover(item);
-    cov.addEventListener('click', function () { send({ c: 'play', i: item.i, key: item.key }); });
     row.appendChild(cov);
 
     var main = make('div', 'm');
     var title = make('div', 't', item.title || 'Без названия');
     if (group && group.length > 1) title.appendChild(make('span', 'bk', group.length + ' глав'));
-    var sub = make('div', 's', subtitle(item));
     main.appendChild(title);
-    main.appendChild(sub);
-    main.addEventListener('click', function () { send({ c: 'play', i: item.i, key: item.key }); });
+    main.appendChild(make('div', 's', subtitle(item)));
     row.appendChild(main);
 
-    if (item.ban) {
-      row.appendChild(actionButton('ban', '⛔', 'Убрать и закрыть заказы зрителю', function () {
-        send({ c: 'ban', i: item.i, key: item.key });
-      }));
+    function play() {
+      if (row.classList.contains('playing')) return;
+      var was = list.querySelector('.q.playing'); if (was) was.classList.remove('playing');
+      row.classList.add('playing', 'tap');
+      setTimeout(function () { row.classList.remove('tap'); }, 220);
+      send({ c: 'play', i: item.i, key: item.key });
     }
-    if (item.canNext) {
-      row.appendChild(actionButton('nx', '↑', 'Играть следующим', function () {
-        send({ c: 'next', i: item.i, key: item.key });
-      }));
-    }
-    row.appendChild(actionButton('rm', '✕', 'Убрать', function () {
-      send({ c: 'remove', i: item.i, key: item.key });
-    }));
+    cov.addEventListener('click', play);
+    main.addEventListener('click', play);
+
+    if (item.canNext) row.appendChild(actionButton('nx', '↑', 'Играть следующим', function () { send({ c: 'next', i: item.i, key: item.key }); }));
+    if (item.ban) row.appendChild(actionButton('ban', '⛔', 'Убрать и закрыть заказы зрителю', function () { gone(row, list); send({ c: 'ban', i: item.i, key: item.key }); }));
+    row.appendChild(actionButton('rm', '✕', 'Убрать', function () { gone(row, list); send({ c: 'remove', i: item.i, key: item.key }); }));
+    if (item.dur) row.appendChild(make('span', 'qtime', item.dur));
     return row;
+  }
+
+  // «Убрать» отзывается сразу: строка схлопывается, остальные подтягиваются
+  function gone(row, list) {
+    row.style.height = row.offsetHeight + 'px';
+    void row.offsetHeight;
+    row.classList.add('gone');
+    setTimeout(function () { flip(list, function () { if (row.parentNode) row.parentNode.removeChild(row); }); }, 180);
   }
 
   function afterRow(item) {
@@ -206,61 +276,48 @@
     row.appendChild(cover(item));
     var main = make('div', 'm');
     main.appendChild(make('div', 't', item.title || ''));
-    var sub = make('div', 's', item.artist || '');
-    main.appendChild(sub);
+    main.appendChild(make('div', 's', item.artist || ''));
     row.appendChild(main);
     return row;
   }
 
-  function render(host, snap, api) {
-    if (!host) return;
+  function draw(host, snap, api) {
     var send = api && typeof api.send === 'function' ? api.send : function () {};
+    var keepScroll = scroller(host).scrollTop;
     host.replaceChildren();
     if (!snap || !Array.isArray(snap.items)) {
       host.appendChild(make('div', 'dock-empty', 'Плейлист пока не пришёл'));
       return;
     }
-    host.appendChild(modeRow(snap, send));
-    if (snap.wave) host.appendChild(waveCard(snap, send));
-
     var list = make('div', 'qlist');
     list.id = 'dockList';
     var items = snap.items;
-    var firstReq = -1;
-    var lastReq = -1;
-    for (var q = 0; q < items.length; q++) {
-      if (!items[q].req) continue;
-      if (firstReq < 0) firstReq = q;
-      lastReq = q;
-    }
-
     if (!items.length) list.appendChild(make('div', 'dock-empty', 'Плейлист пуст'));
     var i = 0;
-    var afterShown = false;
     while (i < items.length) {
-      if (i === firstReq) list.appendChild(separator('Заказы'));
       var it = items[i];
       var j = i;
-      if (it.book) {
-        while (j + 1 < items.length && items[j + 1].book && items[j + 1].book === it.book) j++;
-      }
-      var group = j > i ? items.slice(i, j + 1) : null;
-      list.appendChild(queueRow(it, snap, group, list, items.length, send));
-      if (!afterShown && lastReq >= 0 && j >= lastReq && j < items.length - 1) {
-        list.appendChild(separator('Дальше в плейлисте'));
-        afterShown = true;
-      }
+      if (it.book) while (j + 1 < items.length && items[j + 1].book && items[j + 1].book === it.book) j++;
+      list.appendChild(queueRow(it, snap, j > i ? items.slice(i, j + 1) : null, list, send));
       i = j + 1;
     }
-
+    // «Дальше в волне» — продолжение той же очереди, как в окне (одна прокрутка)
     if (snap.mode === 'live' && Array.isArray(snap.after) && snap.after.length) {
-      list.appendChild(separator('Дальше в волне'));
+      list.appendChild(make('div', 'qn-h', 'Дальше в волне · ' + snap.after.length));
       for (var a = 0; a < snap.after.length; a++) list.appendChild(afterRow(snap.after[a]));
     }
     host.appendChild(list);
+    scroller(host).scrollTop = keepScroll;
   }
 
-  var api = { render: render };
+  function render(host, snap, api) {
+    if (!host) return;
+    // Пока строка поднята, список не перерисовываем — иначе она «выпадет» из пальца
+    if (S.drag) { S.pending = { host: host, snap: snap, api: api }; return; }
+    draw(host, snap, api);
+  }
+
+  var api = { render: render, _state: S };
   global.RemoteDock = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

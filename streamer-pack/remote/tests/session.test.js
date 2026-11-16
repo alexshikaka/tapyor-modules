@@ -296,17 +296,19 @@ test('SESSION: want включается с телефоном и выключа
   assert.equal(h.session.status().state, 'connected', 'телефон всё ещё подключён, просто давно молчит');
 });
 
-test('SESSION: после команды телефон опрашивается раз в 1 с, через 20 с — обычный опрос', async () => {
+test('SESSION: после команды облако опрашивается раз в 0,4 с, через 20 с — раз в 1 с', async () => {
   const h = setup();
   await withData(h);
   h.clock.now += 5000;
   await sendPhone(h.session, { c: 'remove', i: 0, key: 'ym:1' });
   await h.session.pollOnce();
-  assert.equal(h.session.delay(), 1000, 'команда только что пришла');
+  assert.equal(h.session.delay(), 400, 'команда только что пришла');
   h.clock.now += 19999;
-  assert.equal(h.session.delay(), 1000);
+  assert.equal(h.session.delay(), 400);
   h.clock.now += 1;
-  assert.equal(h.session.delay(), 3000, '20 с после команды прошли');
+  assert.equal(h.session.delay(), 1000, '20 с после команды прошли');
+  h.session.lan = true;
+  assert.equal(h.session.delay(), 120, 'Wi-Fi: ящик в самом Тапёре — почти без паузы');
 });
 
 test('SESSION: 404 no-session → idle и понятная ошибка', async () => {

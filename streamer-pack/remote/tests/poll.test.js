@@ -36,7 +36,13 @@ test('ОПРОС ТАПЁРА: свежий телефон важнее давн
   assert.equal(hostDelay({ now: NOW }), HOST_NONE, 'без времени показа — как «телефона нет»');
 });
 
-test('ОПРОС ТЕЛЕФОНА: видна — 3 с, нажатие — 1 с, скрыта — не опрашивает', () => {
+test('ОПРОС ТЕЛЕФОНА: Wi-Fi — 0,3 с, после нажатия 0,15 с', () => {
+  assert.equal(phoneDelay({ now: NOW, visible: true, lan: true }), 300);
+  assert.equal(phoneDelay({ now: NOW, visible: true, lan: true, tappedAt: NOW }), 150);
+  assert.equal(phoneDelay({ now: NOW, visible: false, lan: true }), null);
+});
+
+test('ОПРОС ТЕЛЕФОНА: облако — 1 с, нажатие — 0,35 с, скрыта — не опрашивает', () => {
   assert.equal(phoneDelay({ now: NOW, visible: true }), PHONE_POLL);
   assert.equal(phoneDelay({ now: NOW, visible: false, tappedAt: NOW }), null);
   assert.equal(phoneDelay({ now: NOW, visible: true, tappedAt: NOW }), PHONE_POLL_TAP);

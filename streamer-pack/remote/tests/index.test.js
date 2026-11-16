@@ -109,7 +109,7 @@ function make(core, cloud, lan, clock, extra = {}) {
   }, extra));
 }
 
-test('ПУЛЬТ: по умолчанию облако, в статусе есть список домашних адресов', async () => {
+test('ПУЛЬТ: по умолчанию Wi-Fi, в статусе есть список домашних адресов', async () => {
   const clock = { now: 1763300000000 };
   const core = fakeCore();
   const cloud = fakeCloud();
@@ -118,7 +118,7 @@ test('ПУЛЬТ: по умолчанию облако, в статусе ест
 
   const st = mod.status();
   assert.equal(st.state, 'idle');
-  assert.equal(st.lan.on, false);
+  assert.equal(st.lan.on, true, 'по умолчанию Wi-Fi (решение владельца 16.11)');
   assert.equal(st.lan.url, '');
   assert.equal(st.lan.ip, '192.168.1.5', 'адрес по умолчанию — Wi-Fi с 192.168');
   assert.equal(st.lan.net, '192.168.1.0/24');
@@ -134,11 +134,10 @@ test('ПУЛЬТ: по умолчанию облако, в статусе ест
 
   const started = await mod.start();
   assert.equal(started.state, 'waiting');
-  assert.match(started.url, /^https:\/\/site\.test\/remote\/#/);
-  assert.equal(cloud.started, 1);
-  assert.equal(lan.server.started, 0, 'в облаке сервер Wi-Fi не поднимается');
+  assert.match(started.url, /^http:\/\/192\.168\.1\.5:\d+\/#/, 'по умолчанию QR ведёт на ПК по Wi-Fi');
+  assert.equal(cloud.started, 0, 'облако по умолчанию не трогается');
+  assert.equal(lan.server.started, 1);
   await mod.stop();
-  assert.equal(cloud.ended, 1);
 });
 
 test('ПУЛЬТ: режим Wi-Fi — выбор адреса, QR по http, selfOk и hint phone-missing', async () => {
@@ -146,7 +145,7 @@ test('ПУЛЬТ: режим Wi-Fi — выбор адреса, QR по http, se
   const core = fakeCore();
   const cloud = fakeCloud();
   const lan = fakeLan(clock);
-  const mod = make(core, cloud, lan, clock);
+  const mod = make(core, cloud, lan, clock, { mode: 'cloud' });   // начинаем с облака, чтобы проверить переключение
 
   let st = await mod.command('mode', { mode: 'lan' });
   assert.equal(st.lan.on, true);
@@ -267,7 +266,7 @@ test('ПУЛЬТ: режим и выбранный адрес запоминаю
   const options = { settings };
 
   let mod = make(fakeCore(), fakeCloud(), lan, clock, options);
-  assert.equal(mod.mode, 'cloud', 'по умолчанию облако');
+  assert.equal(mod.mode, 'lan', 'по умолчанию Wi-Fi (решение владельца 16.11)');
   await mod.command('mode', { mode: 'lan' });
   await mod.command('lan-ip', { ip: '10.0.0.2' });
   assert.deepEqual(saved.get('remote'), { mode: 'lan', lanIp: '10.0.0.2' });

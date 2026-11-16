@@ -284,8 +284,8 @@ async function main() {
     const a = await page.locator('#panelDock').boundingBox();
     const b = await page.locator('#panelFeed').boundingBox();
     assert.ok(a && b, 'обе колонки должны иметь размер');
-    assert.ok(a.x < b.x, 'плейлист слева, сообщения справа');
-    assert.ok(Math.abs((a.x + a.width) - b.x) <= 2, 'колонки стоят рядом');
+    assert.ok(a.x > b.x, 'плейлист справа, сообщения слева (решение владельца 16.11)');
+    assert.ok(Math.abs((b.x + b.width) - a.x) <= 2, 'колонки стоят рядом');
     assert.ok(a.width > 300 && b.width > 300, 'на горизонтальном телефоне колонки широкие');
     await page.screenshot({ path: path.join(shots, 'remote-landscape.png') });
 
