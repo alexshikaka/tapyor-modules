@@ -186,6 +186,22 @@ function createCore(store) {
     return true;
   }
 
+  // Постоянная ссылка Wi-Fi (16.11): та же сессия после перезапуска Тапёра — с прежними sid и host.
+  async function restoreSession(sid, host, now) {
+    if (typeof sid !== 'string' || !/^[A-Za-z0-9_-]{22}$/.test(sid)) return fail(400, 'bad_request');
+    if (typeof host !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(host)) return fail(400, 'bad_request');
+    const cur = await store.get(sid);
+    if (cur && cur.host_hash !== hostHash(host).toString('hex')) return fail(403, 'forbidden');
+    if (!cur) {
+      await store.put({
+        sid, host_hash: hostHash(host).toString('hex'),
+        s: '', sv: 0, f: '', fv: 0, ev: [], es: 0, cmds: [], cs: 0,
+        host_at: now, phone_at: 0, exp: now + SESSION_TTL_MS
+      });
+    }
+    return ok({ sid, host, ttl: SESSION_TTL_MS });
+  }
+
   async function opNew(now) {
     const sid = nodeCrypto.randomBytes(16).toString('base64url');
     const host = nodeCrypto.randomBytes(32).toString('base64url');
@@ -342,7 +358,7 @@ function createCore(store) {
     cmdHits.clear();
   }
 
-  return { handle, store, resetRates };
+  return { handle, store, resetRates, restore: restoreSession };
 }
 
 function cleanIp(ip) {
@@ -521,7 +537,10 @@ function createLanServer(options = {}) {
   function candidatePorts() {
     if (Number.isInteger(options.port) && options.port >= 0) return [options.port];
     const out = [];
-    for (let p = PORT_FIRST; p <= PORT_LAST; p++) out.push(p);
+    // порт прошлой ссылки — первым: тогда ссылка у телефона остаётся прежней (16.11)
+    const pref = options.preferPort;
+    if (Number.isInteger(pref) && pref >= PORT_FIRST && pref <= PORT_LAST) out.push(pref);
+    for (let p = PORT_FIRST; p <= PORT_LAST; p++) if (p !== pref) out.push(p);
     return out;
   }
 
@@ -614,7 +633,10 @@ function createLanServer(options = {}) {
     return {
       configured: true,
       call,
-      new: () => call('new', { method: 'POST', body: {} }),
+      new: async (from) => {
+        if (from && from.reuse) return wrap(await core.restore(from.reuse.sid, from.reuse.host, nowFn()));
+        return call('new', { method: 'POST', body: {} });
+      },
       host: (body) => call('host', { method: 'POST', body: body || {} }),
       end: (body) => call('end', { method: 'POST', body: body || {} }),
       poll: (params) => call('poll', { method: 'GET', query: params || {} })

@@ -10,6 +10,7 @@ const clouds = require('./clouds');
 const netinfo = require('./netinfo');
 const lanRelay = require('./lan-relay');
 const { RemoteSession } = require('./session');
+const rcrypto = require('./crypto');
 
 const NO_ADDRESS = 'не найден адрес в домашней сети';
 
@@ -91,7 +92,27 @@ class Remote {
     return this.public;
   }
 
-  async startLan() {
+  // ── Постоянная ссылка Wi-Fi (16.11, владелец): ссылка у телефона «всегда лежит в браузере» и меняется,
+  // только если поменялась сеть (адрес ПК / сеть / порт) или нажали «Новая ссылка». Хранится на
+  // зашифрованной полке модуля (core.secure); нет полки — ссылка просто новая при каждом запуске.
+  async loadLink() {
+    const sec = this.core.secure;
+    if (!sec || typeof sec.get !== 'function') return null;
+    try {
+      const raw = await sec.get('lanLink');
+      const v = raw ? JSON.parse(raw) : null;
+      if (!v || typeof v.sid !== 'string' || typeof v.host !== 'string' || typeof v.key !== 'string') return null;
+      return v;
+    } catch (e) { return null; }
+  }
+
+  async saveLink(v) {
+    const sec = this.core.secure;
+    if (!sec || typeof sec.set !== 'function') return;
+    try { await sec.set('lanLink', v ? JSON.stringify(v) : ''); } catch (e) { /* не сохранилась — будет новая */ }
+  }
+
+  async startLan(preferPort) {
     if (this.lanRun) return this.lanRun;
     const state = this.scanNet();
     const chosen = this.chosenAddress(state);
@@ -102,6 +123,7 @@ class Remote {
     this.lanIp = chosen.ip;
     const server = this.createLan({
       address: chosen.ip,
+      preferPort,
       interfaces: this.interfaces,
       pageDir: this.deps.pageDir,
       // стили окна (карточки сообщений) — берём у локального сервера самого Тапёра
@@ -154,18 +176,38 @@ class Remote {
 
   async start() {
     if (this.mode === 'lan') {
-      const run = await this.startLan();
+      const saved = await this.loadLink();
+      const chosen = this.chosenAddress(this.scanNet());
+      const sameNet = saved && chosen && saved.ip === chosen.ip && saved.net === chosen.net;
+      const run = await this.startLan(sameNet ? saved.port : undefined);
       if (!run) return this.status();
       this.session.relay = run.channel;
       this.session.page = run.info.base + '/';
       this.session.lan = true;
-    } else {
-      this.session.relay = this.cloudRelay;
-      this.session.page = this.page;
-      this.session.lan = false;
+      const same = sameNet && saved.ip === run.info.ip && saved.net === run.info.net && saved.port === run.info.port;
+      let key = null;
+      if (same) { try { key = rcrypto.unb64u(saved.key); } catch (e) { key = null; } }
+      await this.session.start(same && key ? { reuse: { sid: saved.sid, host: saved.host, key } } : {});
+      const s = this.session;
+      if (s.running && s.sid && s.key) {
+        if (!same || s.sid !== saved.sid) this.log('Wi-Fi: новая ссылка' + (saved ? ' (сменилась сеть или порт)' : ''));
+        await this.saveLink({ ip: run.info.ip, net: run.info.net, port: run.info.port, sid: s.sid, host: s.host, key: rcrypto.b64u(s.key) });
+      }
+      return this.status();
     }
+    this.session.relay = this.cloudRelay;
+    this.session.page = this.page;
+    this.session.lan = false;
     await this.session.start();
     return this.status();
+  }
+
+  // После перезапуска Тапёра: была ссылка по Wi-Fi — пульт снова слушает по ней, нажимать ничего не нужно.
+  async autoStart() {
+    if (this.mode !== 'lan' || this.session.running) return;
+    const saved = await this.loadLink();
+    if (!saved) return;
+    try { await this.start(); } catch (e) { this.log('Wi-Fi: автозапуск не удался — ' + ((e && e.message) || e)); }
   }
 
   async stop() {
@@ -176,6 +218,7 @@ class Remote {
 
   async renew() {
     await this.stop();
+    await this.saveLink(null);     // «Новая ссылка» — старая перестаёт работать и по Wi-Fi
     return this.start();
   }
 
@@ -222,6 +265,7 @@ let current = null;
 async function activate(core, deps) {
   if (current) await current.stop();
   current = new Remote(core, deps);
+  current.autoStart().catch(() => {});
   return current;
 }
 

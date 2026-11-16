@@ -298,3 +298,49 @@ test('ПУЛЬТ: deactivate гасит сервер Wi-Fi', async () => {
   assert.equal(mod.status().state, 'idle');
   assert.equal(mod.status().lan.url, '');
 });
+
+test('ПУЛЬТ: ссылка Wi-Fi постоянная — после перезапуска та же, меняется от «Новой ссылки» и смены сети (16.11)', async () => {
+  const lanRelay = require('../src/lan-relay');
+  const clock = { now: 1763300000000 };
+  const shelf = {};
+  const core = fakeCore();
+  core.secure = { get: async (k) => shelf[k] || '', set: async (k, v) => { shelf[k] = v; return { ok: true }; } };
+  let ip = '192.168.1.5';
+  // каждый «запуск Тапёра» — новый сервер с пустой памятью, как в жизни
+  const createLan = () => {
+    const real = lanRelay.createLanServer({ now: () => clock.now });
+    return {
+      async start() { return { ip, port: 47660, net: /^10\./.test(ip) ? '10.0.0.0/24' : '192.168.1.0/24', base: 'http://' + ip + ':47660', selfOk: true }; },
+      async stop() {},
+      channel: () => real.channel()
+    };
+  };
+  const mk = () => new Remote(core, {
+    relay: fakeCloud(), createLan, networkInterfaces: () => IFACES, readProfiles: async () => PROFILES,
+    now: () => clock.now, page: 'https://site.test/remote/'
+  });
+
+  const a = mk();
+  const first = await a.start();
+  assert.match(first.url, /^http:\/\/192\.168\.1\.5:47660\/#/);
+  assert.ok(shelf.lanLink, 'ссылка сохранена на полке модуля');
+  await a.stop();
+
+  const b = mk();                       // «перезапуск Тапёра»
+  await b.autoStart();
+  const again = b.status();
+  assert.equal(again.state, 'waiting', 'после перезапуска пульт поднялся сам');
+  assert.equal(again.url, first.url, 'ссылка та же');
+
+  const renewed = await b.renew();
+  assert.notEqual(renewed.url, first.url, '«Новая ссылка» меняет ссылку');
+  await b.stop();
+
+  ip = '10.0.0.2';                      // другая сеть
+  const c = mk();
+  c.lanIp = '10.0.0.2';
+  const moved = await c.start();
+  assert.notEqual(moved.url, renewed.url, 'другая сеть — другая ссылка');
+  assert.match(moved.url, /^http:\/\/10\.0\.0\.2:47660\/#/);
+  await c.stop();
+});

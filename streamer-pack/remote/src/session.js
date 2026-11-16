@@ -332,7 +332,10 @@ class RemoteSession {
     this.setWant(false);
 
     let res;
-    const from = options && Number.isSafeInteger(options.start) ? { start: options.start } : undefined;
+    let from = options && Number.isSafeInteger(options.start) ? { start: options.start } : undefined;
+    // Постоянная ссылка Wi-Fi: прежние sid/host/ключ (только для своего сервера на ПК)
+    const reuse = options && options.reuse && Buffer.isBuffer(options.reuse.key) && options.reuse.key.length === 32 ? options.reuse : null;
+    if (reuse) from = Object.assign({}, from, { reuse: { sid: reuse.sid, host: reuse.host } });
     try { res = await this.relay.new(from); }
     catch (e) { res = { ok: false, status: 0, code: 'network', error: NETWORK, retryable: true }; }
 
@@ -357,7 +360,7 @@ class RemoteSession {
 
     this.sid = sid;
     this.host = host;
-    this.key = this.crypto.newKey();
+    this.key = reuse && reuse.sid === sid ? reuse.key : this.crypto.newKey();
     this.url = this.phoneAddress();
     this.qrSvg = '';
     if (this.qr) {

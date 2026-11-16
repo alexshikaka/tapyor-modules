@@ -340,9 +340,13 @@
       var res = await fetch(pollUrl(), { method: 'GET', cache: 'no-store' });
       var data = null;
       try { data = await res.json(); } catch (e) { data = null; }
-      if (res.status === 404) { ended(); return; }
+      if (res.status === 404 || (data && data.error === 'no-session')) {
+        // По Wi-Fi ссылка постоянная (16.11): Тапёр мог перезапуститься или пульт ещё не поднялся —
+        // не забываем ссылку, ждём и пробуем снова. Через облако сессия кончилась насовсем.
+        if (RELAY.indexOf('http://') === 0) { lanWait(); return; }
+        ended(); return;
+      }
       if (!res.ok || !data || data.error) {
-        if (data && data.error === 'no-session') { ended(); return; }
         throw new Error('bad reply');
       }
       lastOk = Date.now();
@@ -383,6 +387,12 @@
     } finally {
       pollBusy = false;
     }
+  }
+
+  function lanWait() {
+    setOnline(false);
+    showStatus('Тапёр сейчас не держит пульт — жду. Как только он снова включит пульт, всё оживёт само.', 'lost');
+    schedulePoll(3000);
   }
 
   function ended() {
