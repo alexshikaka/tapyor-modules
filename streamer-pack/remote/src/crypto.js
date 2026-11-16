@@ -1,9 +1,10 @@
 'use strict';
 // Шифрование куска пульта: JSON → deflate-raw → AES-256-GCM.
 // Формат куска (docs/REMOTE.md, «Безопасность»):
-//   base64url(iv 12 байт ‖ шифртекст ‖ тег 16 байт), aad = sid + '|' + вид.
+//   base64url(iv 12 байт ‖ флаг 1 байт ‖ шифртекст ‖ тег 16 байт), aad = sid + '|' + вид.
+// Флаг: 1 — сжато deflate-raw, 0 — без сжатия. Старый формат (без флага) читается.
 // Виды: s — снимок, f — лента, e — событие, c — команда.
-// Тот же формат собран в page/crypto.js (WebCrypto) — совместимость проверяют тесты.
+// Тот же формат собран в page/crypto.js (WebCrypto или AES-GCM на чистом JS) — совместимость проверяют тесты.
 
 const nodeCrypto = require('node:crypto');
 const zlib = require('node:zlib');
@@ -11,6 +12,8 @@ const zlib = require('node:zlib');
 const KEY_LEN = 32;
 const IV_LEN = 12;
 const TAG_LEN = 16;
+const FLAG_NONE = 0;
+const FLAG_DEFLATE = 1;
 const MAX_TEXT = 4 * 1024 * 1024;   // распакованный кусок больше не бывает: снимок ≤ 64 КБ в сжатом виде
 
 function newKey() {
@@ -63,7 +66,28 @@ function seal(key, sid, kind, obj) {
   const cipher = nodeCrypto.createCipheriv('aes-256-gcm', k, iv);
   cipher.setAAD(aad(sid, kind));
   const enc = Buffer.concat([cipher.update(plain), cipher.final(), cipher.getAuthTag()]);
-  return b64u(Buffer.concat([iv, enc]));
+  const flag = Buffer.from([FLAG_DEFLATE]);
+  return b64u(Buffer.concat([iv, flag, enc]));
+}
+
+function openRaw(k, sid, kind, iv, body) {
+  try {
+    const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', k, iv);
+    decipher.setAAD(aad(sid, kind));
+    decipher.setAuthTag(body.subarray(body.length - TAG_LEN));
+    return Buffer.concat([decipher.update(body.subarray(0, body.length - TAG_LEN)), decipher.final()]);
+  } catch (e) {
+    return null;
+  }
+}
+
+function finish(plain, flag) {
+  try {
+    const bytes = flag === FLAG_DEFLATE ? zlib.inflateRawSync(plain, { maxOutputLength: MAX_TEXT }) : plain;
+    return JSON.parse(bytes.toString('utf8'));
+  } catch (e) {
+    return null;
+  }
 }
 
 function open(key, sid, kind, piece) {
@@ -74,17 +98,25 @@ function open(key, sid, kind, piece) {
   const raw = unb64u(piece);
   if (!raw || raw.length < IV_LEN + TAG_LEN) return null;
   const iv = raw.subarray(0, IV_LEN);
-  const body = raw.subarray(IV_LEN);
-  try {
-    const decipher = nodeCrypto.createDecipheriv('aes-256-gcm', k, iv);
-    decipher.setAAD(aad(sid, kind));
-    decipher.setAuthTag(body.subarray(body.length - TAG_LEN));
-    const plain = Buffer.concat([decipher.update(body.subarray(0, body.length - TAG_LEN)), decipher.final()]);
-    const text = zlib.inflateRawSync(plain, { maxOutputLength: MAX_TEXT }).toString('utf8');
-    return JSON.parse(text);
-  } catch (e) {
-    return null;
+
+  // Новый формат: iv ‖ флаг ‖ шифртекст ‖ тег. Если не сошлось — возможно, кусок старый.
+  if (raw.length >= IV_LEN + 1 + TAG_LEN) {
+    const flag = raw[IV_LEN];
+    if (flag === FLAG_NONE || flag === FLAG_DEFLATE) {
+      const plain = openRaw(k, sid, kind, iv, raw.subarray(IV_LEN + 1));
+      if (plain) {
+        const out = finish(plain, flag);
+        if (out !== null) return out;
+      }
+    }
   }
+
+  // Старый формат (RM2): iv ‖ шифртекст ‖ тег, всегда deflate-raw.
+  const old = openRaw(k, sid, kind, iv, raw.subarray(IV_LEN));
+  return old ? finish(old, FLAG_DEFLATE) : null;
 }
 
-module.exports = { newKey, b64u, unb64u, keyBytes, seal, open, KEY_LEN, IV_LEN, TAG_LEN };
+module.exports = {
+  newKey, b64u, unb64u, keyBytes, seal, open,
+  KEY_LEN, IV_LEN, TAG_LEN, FLAG_NONE, FLAG_DEFLATE
+};
