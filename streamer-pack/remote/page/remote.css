@@ -368,9 +368,12 @@ body.tab-feed .col-feed { display: flex; }
 .rq-h .pill { border: 1px solid var(--ln3); border-radius: 6px; padding: 0 4px; }
 .rq-m { font-size: 12.5px; color: var(--tx2); word-break: break-word; }
 .rq-it {
+  /* Как в окне Тапёра и первой док-панели: трек, пометки и кнопки — столбиком на всю ширину.
+     По центру (align-items: center) трек ужимался до «КИН…» (16.11, замечание владельца). */
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
   padding: 6px 8px;
   border-radius: 9px;
   background: var(--bg3);
@@ -381,13 +384,13 @@ body.tab-feed .col-feed { display: flex; }
 .rq-it.db { border-color: var(--warn); }
 .rq-it.rj { border-color: var(--err); }
 .rq-lv { display: none; }
-.rq-tr { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.rq-tr { display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%; }
 .rq-tr img, .rq-tr .ph { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; background: var(--bg4); flex: 0 0 auto; }
 .rq-tr .tm { min-width: 0; flex: 1; }
 .rq-tr .tt { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rq-tr .ts { font-size: 10.5px; color: var(--tx3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rq-note { font-size: 11.5px; color: var(--tx3); }
-.rq-fl { display: flex; gap: 5px; flex-wrap: wrap; }
+.rq-fl { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-start; }
 .rq-fl span { padding: 2px 7px; border-radius: 7px; background: var(--acbg); color: var(--warn); font-size: 10.5px; font-weight: 600; }
 .rq-fl span.rj { color: var(--err); }
 .rq-fl span.pay { color: var(--warn); }
@@ -439,7 +442,7 @@ body.tab-feed .col-feed { display: flex; }
 .np span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar { height: 3px; border-radius: 2px; background: var(--bg4); margin-top: 5px; overflow: hidden; }
 .bar i { display: block; width: 0; height: 100%; background: var(--ac); }
-.tm { font: 500 10.5px var(--mono); color: var(--tx4); flex: 0 0 auto; }
+.foot .tm { font: 500 10.5px var(--mono); color: var(--tx4); flex: 0 0 auto; } /* только время в подвале: .tm есть и в карточках заказов */
 
 /* ── выдача поиска и сообщения ───────────────────────────────────── */
 .res {
