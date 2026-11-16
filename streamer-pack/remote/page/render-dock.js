@@ -211,6 +211,7 @@
     S.drag = null;
     if (!d.lifted) { flushPending(); return; }
     var moved = drop && d.to !== d.from;
+    if (moved) S.drawn = '';
     // Переставляем строку в списке сразу (FLIP — без рывка), снимаем «подъём»
     flip(d.list, function () {
       d.rows.forEach(function (x) { x.style.transition = 'none'; x.style.transform = ''; });
@@ -277,6 +278,7 @@
       if (row.classList.contains('playing')) return;
       var was = list.querySelector('.q.playing'); if (was) was.classList.remove('playing');
       row.classList.add('playing');
+      S.drawn = '';
       send({ c: 'play', i: item.i, key: item.key });
     }
     cov.addEventListener('click', play);
@@ -291,6 +293,7 @@
 
   // «Убрать» отзывается сразу: строка схлопывается, остальные подтягиваются
   function gone(row, list) {
+    S.drawn = '';
     row.style.height = row.offsetHeight + 'px';
     void row.offsetHeight;
     row.classList.add('gone');
@@ -318,10 +321,14 @@
     var send = api && typeof api.send === 'function' ? api.send : function () {};
     var sc = scroller(host);
     var keepScroll = sc.scrollTop;
-    // где стояла каждая строка (по ключу трека) — чтобы переезд показать движением, а не скачком
+    // где стояла каждая строка — чтобы переезд показать движением, а не скачком. Один и тот же трек бывает
+    // в очереди несколько раз (волна, история): сопоставляем по порядку вхождения — 1-й с 1-м, 2-й со 2-м.
+    // (16.11: брали первое вхождение — строка «прилетала» с места двойника выше и наезжала на соседей.)
     var was = new Map();
     Array.prototype.forEach.call(host.querySelectorAll('.q[data-key]'), function (r) {
-      var k = r.getAttribute('data-key'); if (k && !was.has(k)) was.set(k, r.getBoundingClientRect().top);
+      var k = r.getAttribute('data-key'); if (!k) return;
+      if (!was.has(k)) was.set(k, []);
+      was.get(k).push(r.getBoundingClientRect().top);
     });
     IMGS = new Map();
     Array.prototype.forEach.call(host.querySelectorAll('.cov img'), function (im) {
@@ -355,11 +362,13 @@
     host.appendChild(list);
     sc.scrollTop = keepScroll;
     if (!was.size) return;
+    var vh = sc.clientHeight || window.innerHeight || 800;
     Array.prototype.forEach.call(list.querySelectorAll('.q[data-key]'), function (r) {
-      var top0 = was.get(r.getAttribute('data-key'));
+      var tops = was.get(r.getAttribute('data-key'));
+      var top0 = tops && tops.length ? tops.shift() : null;
       if (top0 == null) { r.classList.add('enter'); return; }
       var dy = top0 - r.getBoundingClientRect().top;
-      if (Math.abs(dy) < 2) return;
+      if (Math.abs(dy) < 2 || Math.abs(dy) > vh) return;   // издалека — просто встаёт на место
       r.style.transition = 'none';
       r.style.transform = 'translateY(' + dy + 'px)';
       void r.offsetHeight;
@@ -369,10 +378,25 @@
     });
   }
 
+  // То, что видно в списке. Снимок приходит и когда в очереди ничего не поменялось (время, волна в фоне) —
+  // тогда список не трогаем вовсе: ни перерисовки, ни анимаций, ни мигания (16.11).
+  function viewSig(snap) {
+    if (!snap || !Array.isArray(snap.items)) return '';
+    var it = snap.items.map(function (x) {
+      return [x.key, x.st, x.title, x.artist, x.srcName, x.src, x.dur, x.thumb, x.bg, x.ban, x.canNext, x.book,
+        x.req ? [x.req.kind, x.req.who, x.req.sb] : 0];
+    });
+    var after = snap.mode === 'live' && Array.isArray(snap.after) ? snap.after.map(function (a) { return [a.key, a.title, a.artist, a.thumb]; }) : [];
+    return JSON.stringify([snap.mode, snap.cur, it, after]);
+  }
+
   function render(host, snap, api) {
     if (!host) return;
     // Пока строка поднята, список не перерисовываем — иначе она «выпадет» из пальца
     if (S.drag) { S.pending = { host: host, snap: snap, api: api }; return; }
+    var sig = viewSig(snap);
+    if (sig && sig === S.drawn && host.querySelector('#dockList')) return;
+    S.drawn = sig;
     draw(host, snap, api);
   }
 
