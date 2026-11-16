@@ -5,6 +5,7 @@
   "minCore": "0.32.0",
   "modules": [
     { "id": "bot", "name": "Чат-бот Twitch", "sinceEdition": 1, "main": "bot/src/index.js" },
-    { "id": "overlay", "name": "Оверлей-плейлист", "sinceEdition": 1, "main": "overlay/src/index.js" }
+    { "id": "overlay", "name": "Оверлей-плейлист", "sinceEdition": 1, "main": "overlay/src/index.js" },
+    { "id": "remote", "name": "Пульт с телефона", "sinceEdition": 1, "main": "remote/src/index.js" }
   ]
 }
