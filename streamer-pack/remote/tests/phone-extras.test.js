@@ -119,3 +119,72 @@ test('PHONE: без Wake Lock API — молча и без исключений'
   assert.doesNotThrow(() => lock.setConnected(true));
   assert.equal(lock.state().locked, false);
 });
+
+// 16.11: по http (режим «По Wi-Fi») Wake Lock нет — экран держит беззвучное видео по кругу
+function fakeVideoDoc(playOk) {
+  const listeners = {};
+  const made = [];
+  const doc = {
+    hidden: false,
+    body: { appendChild(el) { el.inDom = true; } },
+    addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
+    removeEventListener(t, fn) { listeners[t] = (listeners[t] || []).filter((f) => f !== fn); },
+    fire(t) { (listeners[t] || []).slice().forEach((fn) => fn()); },
+    count(t) { return (listeners[t] || []).length; },
+    createElement(tag) {
+      const el = { tag, attrs: {}, kids: [], paused: true, currentTime: 0,
+        setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.kids.push(c); },
+        play() { if (doc.playOk) { this.paused = false; return Promise.resolve(); } return Promise.reject(new Error('NotAllowedError')); },
+        pause() { this.paused = true; } };
+      made.push(el);
+      return el;
+    },
+    playOk,
+    made
+  };
+  return doc;
+}
+
+test('PHONE: без Wake Lock — беззвучное видео по кругу, пауза при уходе со страницы', async () => {
+  const doc = fakeVideoDoc(true);
+  const lock = X.createWakeLock({ document: doc, navigator: {} });
+  lock.setConnected(true);
+  await Promise.resolve(); await Promise.resolve();
+  const v = doc.made.find((e) => e.tag === 'video');
+  assert.ok(v && v.inDom, 'видео добавлено на страницу');
+  assert.equal(v.muted, true); assert.equal(v.loop, true); assert.equal(v.playsInline, true);
+  assert.deepEqual(v.kids.map((k) => k.src), ['keepawake.webm', 'keepawake.mp4']);
+  assert.equal(lock.state().video, true, 'видео играет');
+  doc.hidden = true; doc.fire('visibilitychange');
+  assert.equal(v.paused, true, 'страницу скрыли — видео на паузе');
+  doc.hidden = false; doc.fire('visibilitychange');
+  await Promise.resolve();
+  assert.equal(lock.state().video, true, 'вернулись — снова играет');
+  lock.setConnected(false);
+  assert.equal(v.paused, true, 'связи нет — видео на паузе');
+});
+
+test('PHONE: видео без касания не запустилось — запуск при первом касании экрана', async () => {
+  const doc = fakeVideoDoc(false);
+  const lock = X.createWakeLock({ document: doc, navigator: {} });
+  lock.setConnected(true);
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(lock.state().video, false);
+  assert.equal(doc.count('touchend'), 1, 'ждём касания');
+  doc.playOk = true;
+  doc.fire('touchend');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(lock.state().video, true, 'после касания видео играет');
+  assert.equal(doc.count('touchend'), 0, 'обработчик касания снят');
+  lock.setConnected(false);
+});
+
+test('PHONE: Wake Lock отказал — тоже запасное видео', async () => {
+  const doc = fakeVideoDoc(true);
+  const lock = X.createWakeLock({ document: doc, navigator: { wakeLock: { request() { return Promise.reject(new Error('NotAllowedError')); } } } });
+  lock.setConnected(true);
+  await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+  assert.equal(lock.state().locked, false);
+  assert.equal(lock.state().video, true);
+  lock.setConnected(false);
+});

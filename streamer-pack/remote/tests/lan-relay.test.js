@@ -200,3 +200,22 @@ test('LAN: без домашнего адреса — понятная ошиб�
   });
   await assert.rejects(server.start(), /не найден адрес в домашней сети/);
 });
+
+test('LAN: видео «экран не гаснет» отдаётся целиком и кусками (Range — для iPhone)', async () => {
+  await withServer(async (server, info) => {
+    const full = await fetch(info.base + '/keepawake.mp4');
+    assert.equal(full.status, 200);
+    assert.equal(full.headers.get('content-type'), 'video/mp4');
+    assert.equal(full.headers.get('accept-ranges'), 'bytes');
+    const all = Buffer.from(await full.arrayBuffer());
+    assert.ok(all.length > 500);
+    const part = await fetch(info.base + '/keepawake.mp4', { headers: { Range: 'bytes=0-1' } });
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get('content-range'), 'bytes 0-1/' + all.length);
+    assert.deepEqual(Buffer.from(await part.arrayBuffer()), all.subarray(0, 2));
+    const webm = await fetch(info.base + '/keepawake.webm');
+    assert.equal(webm.status, 200);
+    assert.equal(webm.headers.get('content-type'), 'video/webm');
+    await webm.arrayBuffer();
+  });
+});

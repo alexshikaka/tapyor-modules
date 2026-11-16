@@ -150,19 +150,84 @@
   }
 
   // Экран не гаснет, пока страница видна и есть связь. Нет API или отказ — молча.
+  // Wake Lock браузер даёт только защищённой странице (https). В режиме «По Wi-Fi» пульт открыт по
+  // http://192.168… — API нет, поэтому (16.11) запасной путь: крошечное беззвучное видео по кругу
+  // (keepawake.webm / .mp4 рядом со страницей). Пока оно играет, телефон экран не гасит. Без касания
+  // браузер может не дать запустить видео — тогда запускаем при первом касании экрана.
+  function createVideoKeeper(doc) {
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    var video = null, armed = false, want = false, tick = 0;
+    function make() {
+      if (video) return video;
+      var v = doc.createElement('video');
+      if (!v || typeof v.play !== 'function') return null;
+      v.muted = true; v.defaultMuted = true; v.loop = true; v.playsInline = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+      v.setAttribute('aria-hidden', 'true'); v.setAttribute('tabindex', '-1');
+      v.setAttribute('style', 'position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1');
+      [['keepawake.webm', 'video/webm'], ['keepawake.mp4', 'video/mp4']].forEach(function (f) {
+        var src = doc.createElement('source'); src.src = f[0]; src.type = f[1]; v.appendChild(src);
+      });
+      if (doc.body && typeof doc.body.appendChild === 'function') doc.body.appendChild(v);
+      video = v;
+      return v;
+    }
+    function onTouch() { disarm(); if (want) start(); }
+    function arm() {
+      if (armed || typeof doc.addEventListener !== 'function') return;
+      armed = true;
+      doc.addEventListener('touchend', onTouch, true);
+      doc.addEventListener('click', onTouch, true);
+    }
+    function disarm() {
+      if (!armed) return;
+      armed = false;
+      doc.removeEventListener('touchend', onTouch, true);
+      doc.removeEventListener('click', onTouch, true);
+    }
+    function start() {
+      want = true;
+      var v = make(); if (!v) return;
+      try {
+        var p = v.play();
+        if (p && typeof p.then === 'function') p.then(function () { disarm(); }).catch(function () { arm(); });
+      } catch (e) { arm(); }
+      // iPhone останавливает «пустое» зацикленное видео — время сдвигаем сами
+      if (!tick && typeof setInterval === 'function') tick = setInterval(function () {
+        if (video && want && !video.paused && video.currentTime > 1) video.currentTime = 0.1;
+      }, 15000);
+    }
+    function stop() {
+      want = false;
+      disarm();
+      if (tick && typeof clearInterval === 'function') { clearInterval(tick); tick = 0; }
+      if (video) { try { video.pause(); } catch (e) { /* уже стоит */ } }
+    }
+    return { start: start, stop: stop, playing: function () { return !!(video && want && !video.paused); } };
+  }
+
   function createWakeLock(win) {
     var doc = win && win.document;
     var nav = win && win.navigator;
     var sentinel = null;
     var connected = false;
+    var hasApi = !!(nav && nav.wakeLock && typeof nav.wakeLock.request === 'function');
+    var keeper = null;
 
     function canRequest() {
-      return !!(doc && !doc.hidden && connected && nav && nav.wakeLock && typeof nav.wakeLock.request === 'function');
+      return !!(doc && !doc.hidden && connected && hasApi);
     }
+    function shouldKeep() { return !!(doc && !doc.hidden && connected); }
+    function useVideo() {
+      if (!keeper) keeper = createVideoKeeper(doc);
+      if (keeper) keeper.start();
+    }
+    function stopVideo() { if (keeper) keeper.stop(); }
 
     function release() {
       var s = sentinel;
       sentinel = null;
+      stopVideo();
       if (!s || typeof s.release !== 'function') return;
       try {
         var p = s.release();
@@ -171,21 +236,24 @@
     }
 
     function request() {
-      if (!canRequest()) return;
+      if (!shouldKeep()) return;
+      if (!hasApi) { useVideo(); return; }
+      if (sentinel) return;
       try {
         var p = nav.wakeLock.request('screen');
         if (!p || typeof p.then !== 'function') return;
         p.then(function (s) {
           sentinel = s || null;
           if (!canRequest()) { release(); return; }
+          stopVideo();
           if (s && typeof s.addEventListener === 'function') {
             s.addEventListener('release', function () {
               if (sentinel === s) sentinel = null;
               if (canRequest()) request();
             });
           }
-        }).catch(function () { sentinel = null; });
-      } catch (e) { /* нет API или отказ — молча */ }
+        }).catch(function () { sentinel = null; if (shouldKeep()) useVideo(); });
+      } catch (e) { if (shouldKeep()) useVideo(); }
     }
 
     if (doc && typeof doc.addEventListener === 'function') {
@@ -203,7 +271,7 @@
       },
       request: request,
       release: release,
-      state: function () { return { connected: connected, locked: !!sentinel }; }
+      state: function () { return { connected: connected, locked: !!sentinel, video: !!(keeper && keeper.playing()) }; }
     };
   }
 

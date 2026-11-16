@@ -41,7 +41,10 @@ const PAGE_FILES = {
   '/phone-extras.js': ['phone-extras.js', 'text/javascript; charset=utf-8'],
   '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
   '/icon-192.png': ['icon-192.png', 'image/png'],
-  '/icon-512.png': ['icon-512.png', 'image/png']
+  '/icon-512.png': ['icon-512.png', 'image/png'],
+  // Запасной «экран не гаснет» по http (Wake Lock там нет) — 16.11
+  '/keepawake.webm': ['keepawake.webm', 'video/webm'],
+  '/keepawake.mp4': ['keepawake.mp4', 'video/mp4']
 };
 
 const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
@@ -429,7 +432,19 @@ function createLanServer(options = {}) {
         sendText(res, 404, 'not found');
         return;
       }
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+      // Видео на iPhone играет только с ответом на Range (206) — отдаём кусок, если попросили
+      const range = /^bytes=(\d*)-(\d*)$/.exec(String((res.req && res.req.headers && res.req.headers.range) || ''));
+      const isVideo = /^video\//.test(type);
+      if (range && isVideo) {
+        const total = data.length;
+        const start = range[1] === '' ? Math.max(0, total - Number(range[2] || 0)) : Number(range[1]);
+        const end = range[1] !== '' && range[2] !== '' ? Math.min(Number(range[2]), total - 1) : total - 1;
+        if (!(start <= end && start < total)) { res.writeHead(416, { 'Content-Range': 'bytes */' + total }); res.end(); return; }
+        res.writeHead(206, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Accept-Ranges': 'bytes', 'Content-Range': 'bytes ' + start + '-' + end + '/' + total, 'Content-Length': end - start + 1 });
+        res.end(data.subarray(start, end + 1));
+        return;
+      }
+      res.writeHead(200, isVideo ? { 'Content-Type': type, 'Cache-Control': 'no-store', 'Accept-Ranges': 'bytes' } : { 'Content-Type': type, 'Cache-Control': 'no-store' });
       res.end(data);
     });
   }
