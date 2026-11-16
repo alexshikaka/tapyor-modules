@@ -240,6 +240,9 @@ async function main() {
     // Кнопка «На весь экран»: Chromium в тесте даёт API. На iPhone и без API её нет (ниже).
     assert.equal(await page.locator('#fsBtn').isVisible(), true, 'кнопка «На весь экран» есть при поддержке API');
     assert.equal(await page.locator('#iosHint').isVisible(), false, 'на обычном браузере подсказки iPhone нет');
+    assert.equal(await page.locator('link[rel="manifest"]').getAttribute('href'), 'manifest.webmanifest');
+    assert.equal(await page.locator('link[rel="apple-touch-icon"]').getAttribute('href'), 'icon-192.png');
+    assert.equal(await page.locator('meta[name="apple-mobile-web-app-capable"]').getAttribute('content'), 'yes');
 
     // Тексты из снимка — через textContent, без исполнения HTML.
     const title = await page.locator('#dockHost .q .t').first().textContent();
@@ -384,6 +387,30 @@ async function main() {
     let lanSession = null;
     try {
       assert.equal(lanInfo.selfOk, true, 'сервер Wi-Fi отвечает сам себе по /ping');
+
+      // Манифест и значки на домашний экран отдаются с правильными типами.
+      const man = await fetch(lanInfo.base + '/manifest.webmanifest');
+      assert.equal(man.status, 200, 'manifest.webmanifest отдаётся');
+      assert.equal(man.headers.get('content-type'), 'application/manifest+json', 'тип манифеста');
+      const manJson = await man.json();
+      assert.equal(manJson.name, 'Пульт Тапёра');
+      assert.equal(manJson.short_name, 'Тапёр');
+      assert.equal(manJson.display, 'standalone');
+      assert.equal(manJson.start_url, './');
+      assert.equal(manJson.background_color, '#222222');
+      assert.equal(manJson.theme_color, '#222222');
+      assert.deepEqual(manJson.icons.map((i) => i.sizes), ['192x192', '512x512']);
+      for (const [name, type] of [['icon-192.png', 'image/png'], ['icon-512.png', 'image/png']]) {
+        const icon = await fetch(lanInfo.base + '/' + name);
+        assert.equal(icon.status, 200, name);
+        assert.equal(icon.headers.get('content-type'), type, name + ': тип');
+        assert.ok((await icon.arrayBuffer()).byteLength > 100, name + ': файл не пустой');
+      }
+      const lanHtml = await fetch(lanInfo.base + '/').then((r) => r.text());
+      assert.match(lanHtml, /rel="manifest" href="manifest\.webmanifest"/, 'страница подключает манифест');
+      assert.match(lanHtml, /rel="apple-touch-icon" href="icon-192\.png"/, 'страница подключает значок iPhone');
+      assert.match(lanHtml, /name="apple-mobile-web-app-capable" content="yes"/, 'страница открывается без адресной строки');
+      assert.match(lanHtml, /phone-extras\.js/, 'страница подключает дополнения телефона');
       assert.equal((await fetch(lanInfo.base + '/phone-extras.js')).status, 200, 'phone-extras.js в белом списке');
 
       lanSession = new RemoteSession(lanCore, {
