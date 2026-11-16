@@ -168,8 +168,10 @@ function memoryStore() {
 // Логика ящика: op, method, query, body, ip, store, now → { status, body, headers }.
 function createCore(store) {
   const rateNew = createLimiter(10, RATE_WINDOW_MS);
-  const ratePhone = createLimiter(800, RATE_WINDOW_MS);
-  const rateHost = createLimiter(800, RATE_WINDOW_MS);
+  // 16.11: опрос по Wi-Fi — до 7 раз в секунду (телефон 0,15–0,3 с, Тапёр 0,12 с); прежние 800 за 10 мин
+  // кончались за 4 минуты — «Нет связи с Тапёром». Сервер только в домашней сети — запас щедрый.
+  const ratePhone = createLimiter(12000, RATE_WINDOW_MS);
+  const rateHost = createLimiter(12000, RATE_WINDOW_MS);
   const cmdHits = new Map();
 
   function cmdSlot(sid, now) {

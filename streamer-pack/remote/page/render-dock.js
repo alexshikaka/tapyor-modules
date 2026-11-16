@@ -72,8 +72,11 @@
     }, { passive: false });
   }
 
+  // Кто прокручивает список: сам элемент или ближайший предок с прокруткой.
+  // (16.11: раньше начинали с родителя и не замечали, что прокручивается сам #dockHost —
+  // после каждого снимка с ПК список прыгал в начало.)
   function scroller(el) {
-    var p = el && el.parentElement;
+    var p = el;
     while (p && p !== document.body) {
       var oy = getComputedStyle(p).overflowY;
       if (oy === 'auto' || oy === 'scroll') return p;
@@ -283,7 +286,13 @@
 
   function draw(host, snap, api) {
     var send = api && typeof api.send === 'function' ? api.send : function () {};
-    var keepScroll = scroller(host).scrollTop;
+    var sc = scroller(host);
+    var keepScroll = sc.scrollTop;
+    // где стояла каждая строка (по ключу трека) — чтобы переезд показать движением, а не скачком
+    var was = new Map();
+    Array.prototype.forEach.call(host.querySelectorAll('.q[data-key]'), function (r) {
+      var k = r.getAttribute('data-key'); if (k && !was.has(k)) was.set(k, r.getBoundingClientRect().top);
+    });
     host.replaceChildren();
     if (!snap || !Array.isArray(snap.items)) {
       host.appendChild(make('div', 'dock-empty', 'Плейлист пока не пришёл'));
@@ -307,7 +316,20 @@
       for (var a = 0; a < snap.after.length; a++) list.appendChild(afterRow(snap.after[a]));
     }
     host.appendChild(list);
-    scroller(host).scrollTop = keepScroll;
+    sc.scrollTop = keepScroll;
+    if (!was.size) return;
+    Array.prototype.forEach.call(list.querySelectorAll('.q[data-key]'), function (r) {
+      var top0 = was.get(r.getAttribute('data-key'));
+      if (top0 == null) { r.classList.add('enter'); return; }
+      var dy = top0 - r.getBoundingClientRect().top;
+      if (Math.abs(dy) < 2) return;
+      r.style.transition = 'none';
+      r.style.transform = 'translateY(' + dy + 'px)';
+      void r.offsetHeight;
+      r.style.transition = 'transform .3s cubic-bezier(.2, .8, .2, 1)';
+      r.style.transform = '';
+      setTimeout(function () { r.style.transition = ''; }, 320);
+    });
   }
 
   function render(host, snap, api) {
