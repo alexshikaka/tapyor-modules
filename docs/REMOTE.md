@@ -69,7 +69,7 @@
 `s` — снимок пульта, `f` — лента, `ev` — события (выдача поиска, toast). Номера версий `sv/fv` и `seq` ведёт функция.
 `ack` — последний принятый `seq` команды (функция удаляет принятые). Ошибки — `{ error, tapyor_error }` как у других
 функций (`server/common/reply.js`); 404 `no-session` — сессии нет (истекла или «Отключить»).
-CORS: `Access-Control-Allow-Origin` = `PAGE_ORIGIN` (переменная функции, например `https://tapyor.ru`) для `poll`/`cmd`;
+CORS: `Access-Control-Allow-Origin` = `PAGE_ORIGIN` (переменная функции, например `https://alexshikaka.github.io`) для `poll`/`cmd`;
 для `new`/`host`/`end` CORS не нужен (зовёт Node).
 
 Таблица YDB `remote_sessions`: `sid` (ключ), `host_hash`, `s`, `sv`, `f`, `fv`, `ev` (JSON-массив последних 30), `es`,
