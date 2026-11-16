@@ -5,7 +5,7 @@
   'use strict';
 
   var cfg = window.REMOTE_CONFIG && typeof window.REMOTE_CONFIG === 'object' ? window.REMOTE_CONFIG : {};
-  var RELAY = typeof cfg.url === 'string' ? cfg.url.trim().replace(/\/+$/, '') : '';
+  var RELAYS = relayList(cfg);
   var C = window.RemoteCrypto;
   var D = window.RemoteDock;
   var ENDED = 'Пульт отключён в Тапёре. Отсканируй новый QR-код';
@@ -27,6 +27,7 @@
   var parsed = parseHash(location.hash);
   var sid = parsed ? parsed.sid : '';
   var key = parsed ? parsed.key : '';
+  var RELAY = parsed ? (RELAYS[parsed.cloud] || '') : '';
   var stopped = false;
   var visible = !document.hidden;
   var pollTimer = null;
@@ -51,9 +52,30 @@
     if (/^(all|don|chat|pts)$/.test(saved || '')) feedFilter = saved;
   } catch (e) { /* приватный режим */ }
 
+  // Список облаков из config.js; старое поле url читается как облако №0.
+  function relayList(config) {
+    var out = [];
+    if (config && Array.isArray(config.relays)) {
+      for (var i = 0; i < config.relays.length; i++) {
+        var v = config.relays[i];
+        if (typeof v !== 'string') continue;
+        v = v.trim().replace(/\/+$/, '');
+        if (v && out.indexOf(v) < 0) out.push(v);
+      }
+    }
+    if (!out.length && config && typeof config.url === 'string') {
+      var u = config.url.trim().replace(/\/+$/, '');
+      if (u) out.push(u);
+    }
+    return out;
+  }
+
+  // #sid.ключ или #sid.ключ.номер облака (№0 — без номера).
   function parseHash(hash) {
-    var m = /^#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})$/.exec(String(hash || ''));
-    return m ? { sid: m[1], key: m[2] } : null;
+    var m = /^#([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})(?:\.(\d{1,4}))?$/.exec(String(hash || ''));
+    if (!m) return null;
+    var cloud = m[3] == null ? 0 : Number(m[3]);
+    return { sid: m[1], key: m[2], cloud: cloud };
   }
 
   function make(tag, cls, text) {
@@ -517,7 +539,7 @@
     }
     if (!RELAY) {
       stopped = true;
-      showStatus('облако пульта не настроено', 'err');
+      showStatus(RELAYS.length ? 'Облако пульта не найдено — отсканируй код заново' : 'облако пульта не настроено', 'err');
       return;
     }
     setOnline(false);
