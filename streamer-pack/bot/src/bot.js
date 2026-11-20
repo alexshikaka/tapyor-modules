@@ -148,9 +148,17 @@ class Bot {
       const uid = this.pipeline.orders.get(id);
       const who = (uid != null && this.logins && this.logins.get(uid)) || '';
       this.pipeline.orderDropped(id);
-      this.points.dropped(id, why);
       this.journalAdd('cmd', 'заказ' + (who ? ' ' + who : '') + ' не прозвучал — ' + (why === 'failed' ? 'воспроизведение невозможно' : 'стример убрал'));
       this.persist();
+      // Заказ за баллы канала: возврат баллов и ответ делает Points (по своей карте заказов).
+      // Заказ командой раньше оставался без ответа: зритель видел «поставил в очередь», а итога
+      // не получал. Теперь ему говорят правду (решение владельца 21.11.2026).
+      const byPoints = !!(this.points && this.points.byOrder && this.points.byOrder.has(id));
+      if (!byPoints && why === 'failed' && who) {
+        const text = replies.make('notPlayed', { ник: who }, this.settings().replies || {});
+        if (text) this.say(text);
+      }
+      this.points.dropped(id, why);
     });
     // ⛔: у своего заказа (стримера) трек убирается, но тайм-аут не ставится.
     this.core.on('order:ban', (id, min) => {

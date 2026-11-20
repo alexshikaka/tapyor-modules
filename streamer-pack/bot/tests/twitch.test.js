@@ -415,3 +415,19 @@ test('лицензия выключена: бот не стартует, наг�
     assert.equal(await licenseOff(fakeCore({})), false); // ошибка не роняет ядро
   } finally { P.ids = origIds; P.setRewardPaused = origPause; P.start = origStart; }
 });
+
+test('бот: заказ командой не прозвучал — зрителю пишут «воспроизведение невозможно»', async () => {
+  const s = botSetup();
+  await s.bot.start(); await new Promise((r) => setImmediate(r));
+  s.es.emit('event', 'channel.chat.message', { message_id: 'f1', chatter_user_id: '77', chatter_user_login: 'olya', badges: [], message: { text: '!play кино группа крови' } });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(s.core.added.length, 1, 'заказ встал в очередь');
+
+  s.core.emit('order:dropped', s.core.added[0].id, 'failed');
+  await new Promise((r) => setTimeout(r, 30));
+
+  const sent = s.log.filter((x) => x.key === 'POST /helix/chat/messages').map((x) => x.body.message);
+  assert.ok(sent.some((m) => /воспроизведение невозможно/.test(m)), 'зритель узнал о невозможности: ' + JSON.stringify(sent));
+  assert.ok(sent.some((m) => /@olya/.test(m)), 'с упоминанием заказчика');
+  assert.ok(s.bot.journal.some((x) => /воспроизведение невозможно/.test(x.text || '')), 'и в журнале та же формулировка');
+});
