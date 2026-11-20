@@ -149,7 +149,7 @@ class Bot {
       const who = (uid != null && this.logins && this.logins.get(uid)) || '';
       this.pipeline.orderDropped(id);
       this.points.dropped(id, why);
-      this.journalAdd('cmd', 'заказ' + (who ? ' ' + who : '') + ' не прозвучал — ' + (why === 'failed' ? 'трек не включился' : 'стример убрал'));
+      this.journalAdd('cmd', 'заказ' + (who ? ' ' + who : '') + ' не прозвучал — ' + (why === 'failed' ? 'воспроизведение невозможно' : 'стример убрал'));
       this.persist();
     });
     // ⛔: у своего заказа (стримера) трек убирается, но тайм-аут не ставится.
