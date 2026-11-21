@@ -78,7 +78,7 @@
   }
 
   // ── Состояние между отрисовками ──────────────────────────────────────────
-  var S = { drag: null, pending: null, host: null, api: null, touchGuard: false };
+  var S = { drag: null, pending: null, host: null, api: null, touchGuard: false, lastCenter: '' };
 
   // Пока строка поднята, страница не должна прокручиваться пальцем (иначе браузер отберёт касание).
   function ensureTouchGuard() {
@@ -103,6 +103,50 @@
   }
 
   function vibrate(ms) { if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* не обязательно */ } } }
+
+  // Играющий трек держим в середине экрана: сменилась песня — список подкручивается так,
+  // чтобы она оказалась по центру. Если снизу песен не хватает — упираемся в конец, то есть
+  // трек остаётся как можно ближе к середине. Прокручиваем только при СМЕНЕ трека, иначе
+  // ручная прокрутка пальцем не удержится (21.11.2026).
+  function centerOnPlaying(sc, list, snap) {
+    var row = list.querySelector('.q.playing');
+    if (!row) { S.lastCenter = ''; return; }
+    var key = (row.getAttribute('data-key') || '') + '|' + (snap && snap.cur != null ? snap.cur : '');
+    if (key === S.lastCenter) return;
+    S.lastCenter = key;
+    // Меряем после перерасчёта вёрстки: сразу после replaceChildren высоты строк ещё не
+    // окончательные, и центрирование уезжало в конец списка (поймано проверкой 21.11.2026).
+    var run = function () {
+      var el = list.querySelector('.q.playing');
+      if (!el) return;
+      // Позицию берём по offsetTop, а НЕ по getBoundingClientRect: у строк бывает
+      // transform от анимации переезда, и прямоугольник врёт (поймано проверкой 21.11.2026).
+      var rowTop = 0;
+      var node = el;
+      while (node && node !== sc) { rowTop += node.offsetTop || 0; node = node.offsetParent; }
+      if (node !== sc) {
+        // offsetParent-цепочка не дошла до прокручиваемого элемента — считаем через видимую часть
+        var lr0 = sc === document.scrollingElement || sc === document.documentElement
+          ? { top: 0, height: window.innerHeight || 800 }
+          : sc.getBoundingClientRect();
+        var ar0 = el.getBoundingClientRect();
+        sc.scrollTop = Math.max(0, Math.min(Math.max(0, sc.scrollHeight - sc.clientHeight),
+          sc.scrollTop + ((ar0.top + ar0.height / 2) - (lr0.top + lr0.height / 2))));
+        return;
+      }
+      var height = sc === document.scrollingElement || sc === document.documentElement
+        ? (window.innerHeight || 800)
+        : (sc.clientHeight || (window.innerHeight || 800));
+      var target = rowTop + (el.offsetHeight || 0) / 2 - height / 2;
+      var max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+      sc.scrollTop = Math.max(0, Math.min(max, target));
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { requestAnimationFrame(run); });
+    } else {
+      run();
+    }
+  }
 
   // Плавно перенести строки на новые места: FLIP (запомнили — переставили — анимировали из старого места)
   function flip(list, mutate) {
@@ -361,6 +405,7 @@
     }
     host.appendChild(list);
     sc.scrollTop = keepScroll;
+    centerOnPlaying(sc, list, snap);
     if (!was.size) return;
     var vh = sc.clientHeight || window.innerHeight || 800;
     Array.prototype.forEach.call(list.querySelectorAll('.q[data-key]'), function (r) {
